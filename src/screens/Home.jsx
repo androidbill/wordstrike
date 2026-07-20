@@ -38,15 +38,15 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
 
   return (
     <div className="screen home">
+      <button
+        className="kebab qr-btn"
+        type="button"
+        aria-label="Show QR code to share WordStrike"
+        onClick={() => setQrOpen(true)}
+      >
+        <QrGlyph />
+      </button>
       <div className="kebab-wrap">
-        <button
-          className="kebab qr-btn"
-          type="button"
-          aria-label="Show QR code to share WordStrike"
-          onClick={() => setQrOpen(true)}
-        >
-          <QrGlyph />
-        </button>
         <button
           className="kebab"
           type="button"
