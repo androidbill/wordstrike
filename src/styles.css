@@ -627,6 +627,38 @@ h3 { margin: 0; }
 .keyboard.disabled .key:not(.hit):not(.miss) { opacity: 0.55; }
 
 .leave { margin-top: 4px; padding: 8px 18px; font-size: 0.85rem; }
+.game-footer { justify-content: center; gap: 10px; }
+
+/* ── Pause overlay ────────────────────────────────────────────── */
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 16, 0.82);
+  backdrop-filter: blur(8px);
+}
+.pause-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 32px;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background: var(--bg2);
+  text-align: center;
+  max-width: 88vw;
+}
+.pause-emoji { font-size: 2.4rem; }
+.pause-timer {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
 
 /* ── Solve modal ───────────────────────────────────────────────── */
 .sheet.solve { border-radius: 22px; margin-bottom: 12vh; align-self: center; }

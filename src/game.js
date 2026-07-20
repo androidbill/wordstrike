@@ -132,6 +132,33 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
   }
 }
 
+export const PAUSE_WINDOW_MS = 5 * 60_000
+
+// Freeze the game: remember the live deadlines so resume can restore
+// whatever time was left on them.
+export function pauseGamePatch(room, role) {
+  return {
+    paused: {
+      by: role,
+      at: Date.now(),
+      until: Date.now() + PAUSE_WINDOW_MS,
+      letterUntil: room.letterUntil || null,
+      solveUntil: room.solveUntil || null
+    }
+  }
+}
+
+// Resume: restore the deadlines shifted by however long the pause lasted.
+export function resumeGamePatch(room) {
+  const p = room.paused
+  const elapsed = Date.now() - p.at
+  return {
+    paused: null,
+    letterUntil: p.letterUntil ? p.letterUntil + elapsed : null,
+    solveUntil: p.solveUntil ? p.solveUntil + elapsed : null
+  }
+}
+
 // Player chose to pass instead of solving — turn moves on immediately.
 export function passSolvePatch(room) {
   return {
@@ -198,6 +225,7 @@ export function rematchResetPatch() {
     winner: null,
     rematch: null,
     taunt: null,
+    paused: null,
     turn: 'host'
   }
 }

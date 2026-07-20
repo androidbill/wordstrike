@@ -4,7 +4,7 @@ import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
   LETTER_WINDOW_MS, letterMovePatch, solveMovePatch,
   letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
-  rematchResetPatch
+  pauseGamePatch, resumeGamePatch, rematchResetPatch
 } from '../game.js'
 import { addGame } from '../history.js'
 import { playHits, playMiss, playSolve, playWrongSolve, playWin, playTaunt } from '../sounds.js'
@@ -45,9 +45,10 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const [solving, setSolving] = useState(null) // word index
   const [now, setNow] = useState(Date.now())
   const busyRef = useRef(false)
-  const solveWindowOpen = myTurn && room.solveUntil > now
+  const isPaused = !!room.paused && room.status === 'playing'
+  const solveWindowOpen = myTurn && !isPaused && room.solveUntil > now
   const solveSeconds = solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
-  const letterWindowOpen = myTurn && !room.solveUntil && room.letterUntil > now
+  const letterWindowOpen = myTurn && !isPaused && !room.solveUntil && room.letterUntil > now
   const letterSeconds = letterWindowOpen ? Math.max(1, Math.ceil((room.letterUntil - now) / 1000)) : 0
 
   const fire = async (patch) => {
@@ -92,12 +93,26 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   }
 
   useEffect(() => {
-    if ((!room.solveUntil && !room.letterUntil) || room.status !== 'playing') return
+    if ((!room.solveUntil && !room.letterUntil && !room.paused) || room.status !== 'playing') return
     const tick = () => setNow(Date.now())
     tick()
     const interval = setInterval(tick, 200)
     return () => clearInterval(interval)
-  }, [room.solveUntil, room.letterUntil, room.status])
+  }, [room.solveUntil, room.letterUntil, room.paused, room.status])
+
+  // Pause: either player can freeze the game for up to 5 minutes; a repause
+  // starts a fresh 5-minute clock. Anyone can resume; at 0:00 it auto-resumes.
+  const pauseGame = () => {
+    if (!isPaused && room.status === 'playing') fire(pauseGamePatch(room, myRole))
+  }
+  const resumeGame = () => {
+    if (room.paused) fire(resumeGamePatch(room))
+  }
+  useEffect(() => {
+    if (!isPaused || now < room.paused.until) return
+    fire(resumeGamePatch(room))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, isPaused])
 
   // Give rooms created by an older app build a deadline as soon as the
   // current player opens them.
@@ -107,15 +122,15 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   }, [myTurn, room.solveUntil, room.letterUntil, room.status])
 
   useEffect(() => {
-    if (!myTurn || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
+    if (!myTurn || isPaused || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
     fire(letterWindowExpiredPatch(room))
-  }, [now, myTurn, room.letterUntil, room.solveUntil, room.status])
+  }, [now, myTurn, isPaused, room.letterUntil, room.solveUntil, room.status])
 
   useEffect(() => {
-    if (!myTurn || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
+    if (!myTurn || isPaused || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
     setSolving(null)
     fire(solveWindowExpiredPatch(room))
-  }, [now, myTurn, room.solveUntil, room.status])
+  }, [now, myTurn, isPaused, room.solveUntil, room.status])
 
   // Hotseat handoff: once the turn flips away from the player holding the
   // phone, give them a moment to watch the reveal, then drop the curtain.
@@ -337,7 +352,26 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
         </div>
       )}
 
-      <button className="btn ghost leave" onClick={onLeave}>Leave</button>
+      <div className="row game-footer">
+        {room.status === 'playing' && (
+          <button className="btn ghost leave" onClick={pauseGame}>⏸ Pause</button>
+        )}
+        <button className="btn ghost leave" onClick={onLeave}>Leave</button>
+      </div>
+
+      {isPaused && (
+        <div className="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <div className="pause-card">
+            <span className="pause-emoji">⏸</span>
+            <h2 id="pause-title">Game paused</h2>
+            <p className="hint">
+              {room.players[room.paused.by].name} paused the game. It resumes automatically at 0:00.
+            </p>
+            <PauseCountdown until={room.paused.until} now={now} />
+            <button className="btn primary big" onClick={resumeGame}>▶ Resume</button>
+          </div>
+        </div>
+      )}
 
       {tauntShow && (
         <div key={tauntShow.ts} className="taunt-fly" aria-hidden>
@@ -386,6 +420,17 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function PauseCountdown({ until, now }) {
+  const left = Math.max(0, until - now)
+  const m = Math.floor(left / 60_000)
+  const s = Math.floor((left % 60_000) / 1000)
+  return (
+    <div className="pause-timer" role="timer" aria-live="polite">
+      {m}:{String(s).padStart(2, '0')}
     </div>
   )
 }
