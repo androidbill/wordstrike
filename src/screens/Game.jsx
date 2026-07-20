@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  letterMovePatch, solveMovePatch, rematchResetPatch
+  letterMovePatch, solveMovePatch, solveWindowExpiredPatch, rematchResetPatch
 } from '../game.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
@@ -19,7 +19,10 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const myTurn = room.turn === myRole && room.status === 'playing'
   const [view, setView] = useState('attack') // 'attack' | 'defend'
   const [solving, setSolving] = useState(null) // word index
+  const [now, setNow] = useState(Date.now())
   const busyRef = useRef(false)
+  const solveWindowOpen = myTurn && room.solveUntil > now
+  const solveSeconds = solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
 
   const fire = async (patch) => {
     if (busyRef.current) return
@@ -29,14 +32,29 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   }
 
   const callLetter = (letter) => {
-    if (!myTurn || guessedBy(room, myRole)[letter]) return
+    if (!myTurn || solveWindowOpen || guessedBy(room, myRole)[letter]) return
     fire(letterMovePatch(room, myRole, letter))
   }
 
   const submitSolve = (wordIndex, attempt) => {
+    if (!solveWindowOpen) return
     setSolving(null)
     fire(solveMovePatch(room, myRole, wordIndex, attempt))
   }
+
+  useEffect(() => {
+    if (!room.solveUntil || room.status !== 'playing') return
+    const tick = () => setNow(Date.now())
+    tick()
+    const interval = setInterval(tick, 200)
+    return () => clearInterval(interval)
+  }, [room.solveUntil, room.status])
+
+  useEffect(() => {
+    if (!myTurn || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
+    setSolving(null)
+    fire(solveWindowExpiredPatch(room))
+  }, [now, myTurn, room.solveUntil, room.status])
 
   // Hotseat handoff: once the turn flips away from the player holding the
   // phone, give them a moment to watch the reveal, then drop the curtain.
@@ -88,7 +106,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           words={targetWords(room, myRole)}
           guessed={guessedBy(room, myRole)}
           solved={solvedBy(room, myRole)}
-          canSolve={myTurn}
+          canSolve={solveWindowOpen}
           onSolve={setSolving}
           animate
         />
@@ -105,12 +123,20 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
         <>
           <p className="kb-hint">
             {myTurn
-              ? 'Call a letter — or tap a word to solve it'
+              ? solveWindowOpen
+                ? `Solve a word now — ${solveSeconds} second${solveSeconds === 1 ? '' : 's'} left`
+                : 'Call a letter to start your 10-second solve window'
               : hotseat
                 ? `Nice — hand the phone to ${them.name} when you're ready`
                 : 'Waiting for your rival…'}
           </p>
-          <Keyboard guessed={guessedBy(room, myRole)} disabled={!myTurn} onKey={callLetter} />
+          {solveWindowOpen && (
+            <div className="solve-countdown" role="timer" aria-live="polite">
+              <span style={{ '--timer-progress': `${((room.solveUntil - now) / 10_000) * 100}%` }} />
+              <strong>{solveSeconds}</strong>
+            </div>
+          )}
+          <Keyboard guessed={guessedBy(room, myRole)} disabled={!myTurn || solveWindowOpen} onKey={callLetter} />
         </>
       )}
       {view === 'defend' && !hotseat && room.status === 'playing' && (
@@ -177,9 +203,13 @@ function MoveBanner({ room, role }) {
       ? `${actor} called "${m.letter.toUpperCase()}" — ${m.hits} hit${m.hits > 1 ? 's' : ''}! 🔥`
       : `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
   } else {
-    text = m.correct
-      ? `${actor} solved word #${m.wordIndex + 1}! ⚡`
-      : `${actor} fumbled a solve on word #${m.wordIndex + 1} 😬`
+    if (m.type === 'timeout') {
+      text = `${actor}'s solve time ran out ⏱️`
+    } else {
+      text = m.correct
+        ? `${actor} solved word #${m.wordIndex + 1}! ⚡`
+        : `${actor} fumbled a solve on word #${m.wordIndex + 1} 😬`
+    }
   }
   return <div key={m.ts} className={`move-banner ${m.correct ? 'hit' : 'miss'}`}>{text}</div>
 }
@@ -256,25 +286,36 @@ function Keyboard({ guessed, disabled, onKey }) {
 }
 
 function SolveModal({ word, index, guessed, onSubmit, onClose }) {
-  const [attempt, setAttempt] = useState('')
+  const blankIndexes = useMemo(
+    () => [...word].map((_, i) => i).filter((i) => !guessed[word[i]]),
+    [word, guessed]
+  )
+  const [blankLetters, setBlankLetters] = useState('')
   const inputRef = useRef(null)
+
+  const attempt = [...word]
+  blankIndexes.forEach((wordIndex, blankIndex) => {
+    attempt[wordIndex] = blankLetters[blankIndex] || ''
+  })
 
   const submit = (e) => {
     e.preventDefault()
-    if (attempt.length === 5) onSubmit(index, attempt)
+    if (blankLetters.length === blankIndexes.length) onSubmit(index, attempt.join(''))
   }
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <form className="sheet solve" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3>Solve word #{index + 1}</h3>
-        <p className="hint">Get it right and you keep your turn. Miss and it passes.</p>
+        <p className="hint">Type only the highlighted blank letters. Get it right and the timer restarts.</p>
         <div className="solve-tiles" onClick={() => inputRef.current?.focus()}>
           {[0, 1, 2, 3, 4].map((i) => {
             const known = guessed[word[i]] ? word[i] : null
+            const blankIndex = blankIndexes.indexOf(i)
+            const typed = blankIndex >= 0 ? blankLetters[blankIndex] : ''
             return (
-              <span key={i} className={`tile ${attempt[i] ? 'typed' : known ? 'revealed' : ''}`}>
-                {attempt[i] || known || ''}
+              <span key={i} className={`tile ${typed ? 'typed' : known ? 'revealed locked' : 'solve-blank'}`}>
+                {typed || known || ''}
               </span>
             )
           })}
@@ -282,8 +323,8 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
         <input
           ref={inputRef}
           className="ghost-input"
-          value={attempt}
-          onChange={(e) => setAttempt(e.target.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, 5))}
+          value={blankLetters}
+          onChange={(e) => setBlankLetters(e.target.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, blankIndexes.length))}
           autoFocus
           autoCapitalize="off"
           autoCorrect="off"
@@ -292,7 +333,7 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
         />
         <div className="row">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={attempt.length !== 5}>Solve!</button>
+          <button className="btn primary" disabled={blankLetters.length !== blankIndexes.length}>Solve!</button>
         </div>
       </form>
     </div>

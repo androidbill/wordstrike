@@ -12,6 +12,7 @@
 // }
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+export const SOLVE_WINDOW_MS = 10_000
 
 export function makeRoomCode() {
   let code = ''
@@ -36,6 +37,7 @@ export function newRoom(code, hostProfile, hostWords) {
     guessed: { host: {}, guest: {} },
     solved: { host: [false, false, false, false, false], guest: [false, false, false, false, false] },
     lastMove: null,
+    solveUntil: null,
     winner: null,
     left: {}
   }
@@ -66,7 +68,8 @@ function isWordFullyRevealed(word, guessedLetters) {
   return [...word].every((ch) => guessedLetters[ch])
 }
 
-// Build the DB patch for guessing a letter. Turn passes either way.
+// Build the DB patch for guessing a letter. The caller keeps the turn for a
+// short solve window, regardless of whether the letter hit.
 // Words that become fully revealed by this letter count as solved.
 export function letterMovePatch(room, role, letter) {
   const words = targetWords(room, role)
@@ -79,7 +82,8 @@ export function letterMovePatch(room, role, letter) {
   return {
     [`guessed/${role}`]: nextGuessed,
     [`solved/${role}`]: nextSolved,
-    turn: won ? role : otherRole(role),
+    turn: role,
+    solveUntil: won ? null : Date.now() + SOLVE_WINDOW_MS,
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
     lastMove: { by: role, type: 'letter', letter, correct: hits > 0, hits, ts: Date.now() }
@@ -87,7 +91,7 @@ export function letterMovePatch(room, role, letter) {
 }
 
 // Build the DB patch for a solve attempt. Correct: word revealed, keep the
-// turn. Wrong: turn passes.
+// turn and restart the solve window. Wrong: turn passes immediately.
 export function solveMovePatch(room, role, wordIndex, attempt) {
   const words = targetWords(room, role)
   const correct = attempt.toLowerCase() === words[wordIndex]
@@ -96,9 +100,23 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
   return {
     [`solved/${role}`]: nextSolved,
     turn: correct ? role : otherRole(role),
+    solveUntil: correct && !won ? Date.now() + SOLVE_WINDOW_MS : null,
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
     lastMove: { by: role, type: 'solve', wordIndex, correct, ts: Date.now() }
+  }
+}
+
+export function solveWindowExpiredPatch(room) {
+  return {
+    turn: otherRole(room.turn),
+    solveUntil: null,
+    lastMove: {
+      by: room.turn,
+      type: 'timeout',
+      correct: false,
+      ts: Date.now()
+    }
   }
 }
 
@@ -117,6 +135,7 @@ export function rematchResetPatch() {
     guessed: null,
     solved: null,
     lastMove: null,
+    solveUntil: null,
     winner: null,
     rematch: null,
     turn: 'host'
