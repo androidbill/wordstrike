@@ -119,7 +119,9 @@ h3 { margin: 0; }
 .icon-btn:hover { background: rgba(255, 255, 255, 0.08); }
 
 /* ── Home / logo ───────────────────────────────────────────────── */
-.home { padding-top: 9vh; gap: 26px; }
+/* Top padding clears the fixed QR / menu buttons (44px tall at
+   safe-area + 10px) even on notched phones. */
+.home { padding-top: max(9vh, calc(env(safe-area-inset-top) + 66px)); gap: 26px; }
 .kebab-wrap {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 10px);
