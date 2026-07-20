@@ -120,6 +120,96 @@ h3 { margin: 0; }
 
 /* ── Home / logo ───────────────────────────────────────────────── */
 .home { padding-top: 9vh; gap: 26px; }
+.kebab-wrap {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 30;
+}
+.kebab {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: rgba(18, 23, 50, 0.88);
+  font: 700 1.75rem/1 system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  border: 0;
+  background: transparent;
+}
+.menu-pop {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: 170px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: #171c36;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.48);
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover { background: rgba(255, 255, 255, 0.08); }
+.menu-item + .menu-item { border-top: 1px solid var(--panel-border); }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(4, 6, 15, 0.82);
+  backdrop-filter: blur(7px);
+}
+.modal-card {
+  width: min(100%, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 24px;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background: #151a32;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+.modal-card h2, .modal-card p { margin: 0; }
+.modal-card p { color: var(--ink-dim); line-height: 1.5; }
+.about-icon { width: 96px; height: 96px; border-radius: 22px; }
+.about-version { color: var(--ink-dim); font-size: 0.85rem; }
+.update-icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  color: #171203;
+  background: var(--gold);
+  font-size: 2.5rem;
+  font-weight: 800;
+}
 .logo { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .logo-tiles { display: flex; gap: 6px; }
 .logo-tiles.strike { margin-top: -2px; }

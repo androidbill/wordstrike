@@ -7,6 +7,7 @@ import Words from './screens/Words.jsx'
 import Lobby from './screens/Lobby.jsx'
 import Game from './screens/Game.jsx'
 import Curtain from './screens/Curtain.jsx'
+import { hardRefresh, useUpdateCheck } from './appUpdates.js'
 
 const PROFILE_KEY = 'ws-profile'
 const SESSION_KEY = 'ws-session'
@@ -23,6 +24,7 @@ function load(key, storage = localStorage) {
 }
 
 export default function App() {
+  const latestVersion = useUpdateCheck()
   const [profile, setProfile] = useState(() => load(PROFILE_KEY))
   const [session, setSession] = useState(() => load(SESSION_KEY, sessionStorage)) // {code, role, hotseat?}
   const [room, setRoom] = useState(null)
@@ -236,6 +238,16 @@ export default function App() {
     <div className="app">
       {isLocalMode && <div className="local-badge">Local demo — online rooms sync between tabs of this browser</div>}
       {screen}
+      {latestVersion && (
+        <div className="modal-overlay update-overlay" role="dialog" aria-modal="true" aria-labelledby="update-title">
+          <div className="modal-card update-card">
+            <div className="update-icon">↻</div>
+            <h2 id="update-title">WordStrike update available</h2>
+            <p>A newer version of WordStrike is ready. Refresh now to get the latest version.</p>
+            <button className="btn primary big" onClick={hardRefresh}>Refresh</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

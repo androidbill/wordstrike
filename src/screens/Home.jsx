@@ -1,9 +1,31 @@
 import { useState } from 'react'
 import { APP_VERSION } from '../version.js'
+import { hardRefresh } from '../appUpdates.js'
 
 export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+
+  const shareApp = async () => {
+    setMenuOpen(false)
+    const shareData = {
+      title: 'WordStrike',
+      text: 'Play WordStrike — guess letters, solve words, and sink your rival!',
+      url: 'https://androidbill.github.io/wordstrike/'
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(shareData.url)
+        window.alert('WordStrike link copied to your clipboard.')
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') window.alert('Unable to share WordStrike on this device.')
+    }
+  }
 
   const submitJoin = (e) => {
     e.preventDefault()
@@ -12,6 +34,27 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
 
   return (
     <div className="screen home">
+      <div className="kebab-wrap">
+        <button
+          className="kebab"
+          type="button"
+          aria-label="Open app menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          ⋮
+        </button>
+        {menuOpen && (
+          <>
+            <button className="menu-backdrop" aria-label="Close app menu" onClick={() => setMenuOpen(false)} />
+            <div className="menu-pop">
+              <button className="menu-item" type="button" onClick={hardRefresh}>↻ Refresh</button>
+              <button className="menu-item" type="button" onClick={shareApp}>↗ Share</button>
+              <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>
+            </div>
+          </>
+        )}
+      </div>
       <div className="logo">
         <div className="logo-tiles">
           {['W', 'O', 'R', 'D'].map((ch, i) => (
@@ -65,6 +108,17 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
       </details>
 
       <span className="version">v{APP_VERSION}</span>
+      {aboutOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-title" onClick={() => setAboutOpen(false)}>
+          <div className="modal-card about-card" onClick={(event) => event.stopPropagation()}>
+            <img className="about-icon" src={`${import.meta.env.BASE_URL}icons/icon-192.png`} alt="WordStrike app icon" />
+            <h2 id="about-title">WordStrike</h2>
+            <p>Created By Bill Parsons</p>
+            <span className="about-version">Version {APP_VERSION}</span>
+            <button className="btn ghost" type="button" onClick={() => setAboutOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
