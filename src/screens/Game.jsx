@@ -100,13 +100,13 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     return () => clearInterval(interval)
   }, [room.solveUntil, room.letterUntil, room.paused, room.status])
 
-  // Pause: either player can freeze the game for up to 5 minutes; a repause
-  // starts a fresh 5-minute clock. Anyone can resume; at 0:00 it auto-resumes.
+  // Pause: only on your own turn, for up to 5 minutes; a repause starts a
+  // fresh clock. Only the pauser can resume early; at 0:00 it auto-resumes.
   const pauseGame = () => {
-    if (!isPaused && room.status === 'playing') fire(pauseGamePatch(room, myRole))
+    if (!isPaused && myTurn) fire(pauseGamePatch(room, myRole))
   }
   const resumeGame = () => {
-    if (room.paused) fire(resumeGamePatch(room))
+    if (room.paused && room.paused.by === myRole) fire(resumeGamePatch(room))
   }
   useEffect(() => {
     if (!isPaused || now < room.paused.until) return
@@ -353,7 +353,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
       )}
 
       <div className="row game-footer">
-        {room.status === 'playing' && (
+        {myTurn && (
           <button className="btn ghost leave" onClick={pauseGame}>⏸ Pause</button>
         )}
         <button className="btn ghost leave" onClick={onLeave}>Leave</button>
@@ -365,10 +365,14 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
             <span className="pause-emoji">⏸</span>
             <h2 id="pause-title">Game paused</h2>
             <p className="hint">
-              {room.players[room.paused.by].name} paused the game. It resumes automatically at 0:00.
+              {room.paused.by === myRole
+                ? 'You paused the game. It resumes automatically at 0:00.'
+                : `${room.players[room.paused.by].name} paused the game. It resumes when they're ready or at 0:00.`}
             </p>
             <PauseCountdown until={room.paused.until} now={now} />
-            <button className="btn primary big" onClick={resumeGame}>▶ Resume</button>
+            {room.paused.by === myRole && (
+              <button className="btn primary big" onClick={resumeGame}>▶ Resume</button>
+            )}
           </div>
         </div>
       )}
