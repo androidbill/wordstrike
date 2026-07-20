@@ -122,8 +122,33 @@ h3 { margin: 0; }
 
 /* ── Home / logo ───────────────────────────────────────────────── */
 /* Top padding clears the fixed QR / menu buttons (44px tall at
-   safe-area + 10px) even on notched phones. */
-.home { padding-top: max(9vh, calc(env(safe-area-inset-top) + 66px)); gap: 26px; }
+   safe-area + 10px) even on notched phones. The screen flexes to fill
+   the viewport so everything fits without scrolling. */
+.home {
+  padding-top: max(4vh, calc(env(safe-area-inset-top) + 60px));
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  gap: 18px;
+  flex: 1;
+  justify-content: space-evenly;
+}
+
+/* Compact the landing page on phone-height screens. */
+@media (max-height: 900px) {
+  .home { gap: 12px; }
+  .home .logo-tile { width: 36px; height: 36px; font-size: 1.1rem; }
+  .home .tagline { margin: 6px 0 0; font-size: 0.85rem; }
+  .home .btn.big { padding: 11px; font-size: 0.95rem; }
+  .home .home-actions { gap: 8px; }
+  .home .btn-sub { font-size: 0.66rem; margin-top: 1px; }
+  .home .rules { font-size: 0.82rem; }
+  .home .tut-nudge { padding: 8px 12px; font-size: 0.78rem; }
+}
+@media (max-height: 740px) {
+  .home { gap: 8px; }
+  .home .logo-tile { width: 30px; height: 30px; font-size: 0.95rem; }
+  .home .btn.big { padding: 9px; font-size: 0.9rem; }
+  .home .rules ul { line-height: 1.4; }
+}
 .kebab-wrap {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 10px);
