@@ -125,6 +125,31 @@ h3 { margin: 0; }
   top: calc(env(safe-area-inset-top) + 10px);
   right: max(12px, env(safe-area-inset-right));
   z-index: 30;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.qr-btn { display: grid; place-items: center; }
+.qr-room-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+}
+.qr-card { align-items: center; text-align: center; }
+.qr-frame {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px;
+  margin: 14px 0;
+  display: grid;
+  place-items: center;
+}
+.qr-img {
+  display: block;
+  width: min(64vw, 280px);
+  height: auto;
+  border-radius: 8px;
 }
 .kebab {
   width: 44px;

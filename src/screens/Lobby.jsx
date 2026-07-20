@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import QRModal from './QRModal.jsx'
+import { APP_URL, QrGlyph } from './Home.jsx'
 
 export default function Lobby({ room, role, onLeave }) {
   const [copied, setCopied] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
   const me = room.players[role]
   const them = room.players[role === 'host' ? 'guest' : 'host']
 
@@ -22,6 +25,18 @@ export default function Lobby({ room, role, onLeave }) {
         ))}
         <span className="copy-hint">{copied ? 'Copied!' : 'Tap to copy'}</span>
       </button>
+
+      <button className="btn ghost qr-room-btn" type="button" onClick={() => setQrOpen(true)}>
+        <QrGlyph /> Show QR to join
+      </button>
+      {qrOpen && (
+        <QRModal
+          url={`${APP_URL}?join=${room.code}`}
+          title={`Join room ${room.code}`}
+          subtitle="Have your rival scan this to jump straight into the room."
+          onClose={() => setQrOpen(false)}
+        />
+      )}
 
       <div className="versus">
         <div className={`player-card ${me?.ready ? 'ready' : ''}`}>

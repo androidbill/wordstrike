@@ -1,19 +1,23 @@
 import { useState } from 'react'
 import { APP_VERSION } from '../version.js'
 import { hardRefresh } from '../appUpdates.js'
+import QRModal from './QRModal.jsx'
+
+export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
 export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
 
   const shareApp = async () => {
     setMenuOpen(false)
     const shareData = {
       title: 'WordStrike',
       text: 'Play WordStrike — guess letters, solve words, and sink your rival!',
-      url: 'https://androidbill.github.io/wordstrike/'
+      url: APP_URL
     }
     try {
       if (navigator.share) {
@@ -35,6 +39,14 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
   return (
     <div className="screen home">
       <div className="kebab-wrap">
+        <button
+          className="kebab qr-btn"
+          type="button"
+          aria-label="Show QR code to share WordStrike"
+          onClick={() => setQrOpen(true)}
+        >
+          <QrGlyph />
+        </button>
         <button
           className="kebab"
           type="button"
@@ -108,6 +120,14 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
       </details>
 
       <span className="version">v{APP_VERSION}</span>
+      {qrOpen && (
+        <QRModal
+          url={APP_URL}
+          title="Share WordStrike"
+          subtitle="Have a friend scan this to get the app."
+          onClose={() => setQrOpen(false)}
+        />
+      )}
       {aboutOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-title" onClick={() => setAboutOpen(false)}>
           <div className="modal-card about-card" onClick={(event) => event.stopPropagation()}>
@@ -120,5 +140,14 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Simple QR glyph so the icon works offline with no extra assets.
+export function QrGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h3v3h-3v-3zm5 0h3v3h-3v-3zm-5 5h3v3h-3v-3zm5 0h3v3h-3v-3z" />
+    </svg>
   )
 }

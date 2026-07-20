@@ -117,6 +117,16 @@ export default function App() {
     setFlow({ mode: 'join', code, step: 'profile' })
   }
 
+  // Opened via a scanned room QR (…?join=CODE): jump into the join flow.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('join')
+    if (!code) return
+    // Strip the param so a refresh doesn't re-trigger the join.
+    window.history.replaceState(null, '', window.location.pathname)
+    if (!session) startJoin(code.toUpperCase())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onProfileDone = async (p) => {
     if (flow.mode === 'hotseat') {
       if (flow.step === 'profile1') {
