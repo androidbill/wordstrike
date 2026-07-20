@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { APP_VERSION } from '../version.js'
 import { hardRefresh } from '../appUpdates.js'
 import QRModal from './QRModal.jsx'
+import Daily from './Daily.jsx'
 import { loadHistory, historyStats, formatDuration, formatSolveTime } from '../history.js'
+import { ACHIEVEMENTS, loadEarned } from '../achievements.js'
+import { isMuted, toggleMuted } from '../sounds.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
@@ -13,6 +16,19 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [dailyOpen, setDailyOpen] = useState(false)
+  const [muted, setMuted] = useState(isMuted)
+  const [welcome, setWelcome] = useState(false)
+
+  // First launch on this device: greet with confetti.
+  useEffect(() => {
+    if (!localStorage.getItem('ws-welcomed')) {
+      localStorage.setItem('ws-welcomed', '1')
+      setWelcome(true)
+      const t = setTimeout(() => setWelcome(false), 4200)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   const shareApp = async () => {
     setMenuOpen(false)
@@ -32,6 +48,8 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
       if (error?.name !== 'AbortError') window.alert('Unable to share WordStrike on this device.')
     }
   }
+
+  if (dailyOpen) return <Daily onBack={() => setDailyOpen(false)} />
 
   const submitJoin = (e) => {
     e.preventDefault()
@@ -64,6 +82,9 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
             <div className="menu-pop">
               <button className="menu-item" type="button" onClick={hardRefresh}>↻ Refresh</button>
               <button className="menu-item" type="button" onClick={shareApp}>↗ Share</button>
+              <button className="menu-item" type="button" onClick={() => setMuted(toggleMuted())}>
+                {muted ? '🔇 Sound off' : '🔊 Sound on'}
+              </button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}>🏆 History</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>
             </div>
@@ -91,6 +112,10 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
           <button className="btn ghost big" onClick={onHotseat}>
             🤝 Pass &amp; Play
             <span className="btn-sub">one device · works offline</span>
+          </button>
+          <button className="btn ghost big" onClick={() => setDailyOpen(true)}>
+            📅 Daily Word
+            <span className="btn-sub">one word a day · brag to your friends</span>
           </button>
         </div>
       ) : (
@@ -124,6 +149,20 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
 
       <span className="version">v{APP_VERSION}</span>
       {historyOpen && <HistoryModal onClose={() => setHistoryOpen(false)} />}
+      {welcome && (
+        <div className="welcome-toast" role="status">
+          <div className="welcome-confetti" aria-hidden>
+            {Array.from({ length: 40 }, (_, i) => (
+              <span key={i} style={{
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 1.6}s`,
+                background: ['#f5c542', '#5b8def', '#e75a7c', '#4ecdc4', '#a78bfa'][i % 5]
+              }} />
+            ))}
+          </div>
+          🎉 Welcome to WordStrike!
+        </div>
+      )}
       {qrOpen && (
         <QRModal
           url={APP_URL}
@@ -150,6 +189,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
 function HistoryModal({ onClose }) {
   const history = loadHistory()
   const stats = historyStats(history)
+  const earned = loadEarned()
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="history-title" onClick={onClose}>
@@ -194,6 +234,14 @@ function HistoryModal({ onClose }) {
             </div>
           </>
         )}
+        <div className="ach-grid">
+          {ACHIEVEMENTS.map((a) => (
+            <div key={a.id} className={`ach-badge ${earned[a.id] ? 'earned' : ''}`} title={a.desc}>
+              <span className="ach-badge-emoji">{a.emoji}</span>
+              <span className="ach-badge-name">{a.name}</span>
+            </div>
+          ))}
+        </div>
         <button className="btn ghost" type="button" onClick={onClose}>Close</button>
       </div>
     </div>

@@ -7,6 +7,27 @@ import {
   rematchResetPatch
 } from '../game.js'
 import { addGame } from '../history.js'
+import { playHits, playMiss, playSolve, playWrongSolve, playWin, playTaunt } from '../sounds.js'
+import { earn } from '../achievements.js'
+
+const TAUNTS = ['😂', '😱', '🔥', '😭', '👏']
+
+const WIN_TITLES = [
+  'Word Wizard 🧙', 'Vowel Vandal 😈', 'The Alphabet Menace 🔤', 'Letter Lord 👑',
+  'Consonant Crusher 💪', 'The Dictionary 📖', 'Spelling Bee Royalty 🐝', 'Lexicon Legend ⭐'
+]
+const LOSE_TITLES = [
+  'Moral Victor 🎖️', 'Almost Famous 🌟', 'Future Champion 🌱', 'Crowd Favorite 💐',
+  'The Comeback Kid (next time) 🔄', 'Style Points Winner ✨'
+]
+
+// Deterministic pick so both devices show the same title.
+function pickTitle(list, room) {
+  let h = 0
+  const s = `${room.code}${room.startedAt || 0}`
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return list[h % list.length]
+}
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
@@ -47,7 +68,27 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const submitSolve = (wordIndex, attempt) => {
     if (!solveWindowOpen) return
     setSolving(null)
+    // Achievement checks belong to the local solver.
+    const word = targetWords(room, myRole)[wordIndex]
+    if (attempt.toLowerCase() === word) {
+      if ([...word].every((ch) => !guessedBy(room, myRole)[ch])) unlock('mind_reader')
+      if (room.startedAt && Date.now() - room.startedAt < 60_000) unlock('speed_demon')
+    }
     fire(solveMovePatch(room, myRole, wordIndex, attempt))
+  }
+
+  const sendTaunt = (emoji) => {
+    fire({ taunt: { emoji, by: myRole, ts: Date.now() } })
+  }
+
+  // Achievement toast queue.
+  const [toast, setToast] = useState(null)
+  const unlock = (id) => {
+    const a = earn(id)
+    if (a) {
+      setToast(a)
+      setTimeout(() => setToast(null), 3200)
+    }
   }
 
   useEffect(() => {
@@ -134,6 +175,62 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     fastestRef.current = null
   }, [room, hotseat])
 
+  // Per-player hot streaks (consecutive correct letters), sound effects,
+  // screen shake on a fumbled solve, and avatar reactions — all driven by
+  // watching lastMove change.
+  const [streaks, setStreaks] = useState({ host: 0, guest: 0 })
+  const [shake, setShake] = useState(false)
+  const [reaction, setReaction] = useState(null) // {role, kind, ts}
+  const seenMoveRef = useRef(room.lastMove?.ts)
+  useEffect(() => {
+    const m = room.lastMove
+    if (!m || m.ts === seenMoveRef.current) return
+    seenMoveRef.current = m.ts
+    if (m.type === 'letter') {
+      setStreaks((s) => ({ ...s, [m.by]: m.correct ? s[m.by] + 1 : 0 }))
+      setReaction({ role: m.by, kind: m.correct ? 'bounce' : 'droop', ts: m.ts })
+      if (m.correct) playHits(m.hits)
+      else playMiss()
+    } else if (m.type === 'solve') {
+      setReaction({ role: m.by, kind: m.correct ? 'spin' : 'droop', ts: m.ts })
+      if (m.correct) {
+        playSolve()
+      } else {
+        playWrongSolve()
+        setShake(true)
+        setTimeout(() => setShake(false), 550)
+      }
+    }
+  }, [room.lastMove])
+
+  // Taunt flying across the screen (both devices see it).
+  const [tauntShow, setTauntShow] = useState(null)
+  const seenTauntRef = useRef(room.taunt?.ts)
+  useEffect(() => {
+    const t = room.taunt
+    if (!t || t.ts === seenTauntRef.current) return
+    seenTauntRef.current = t.ts
+    setTauntShow(t)
+    playTaunt()
+    const timer = setTimeout(() => setTauntShow(null), 1600)
+    return () => clearTimeout(timer)
+  }, [room.taunt])
+
+  // Winner fanfare + result achievements once the game ends.
+  useEffect(() => {
+    if (room.status !== 'finished' || !room.winner) return
+    playWin()
+    const iWon = hotseat || room.winner === role
+    if (iWon) {
+      unlock('first_blood')
+      const w = solvedCount(room, room.winner)
+      const l = solvedCount(room, otherRole(room.winner))
+      if (w === 5 && l === 4) unlock('photo_finish')
+      if (w === 5 && l === 0) unlock('clean_sweep')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.status, room.winner])
+
   // Fireworks celebrate every correct solve; keyed by the move timestamp so
   // each solve gets a fresh burst.
   const [fireworksAt, setFireworksAt] = useState(null)
@@ -149,9 +246,9 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const opponentLeft = !hotseat && room.left?.[rival]
 
   return (
-    <div className="screen game">
+    <div className={`screen game ${shake ? 'shake' : ''}`}>
       <header className="game-header">
-        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} />
+        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} reaction={reaction?.role === myRole ? reaction : null} />
         <div className="turn-pill-wrap">
           {room.status === 'playing' && (
             <span className={`turn-pill ${myTurn ? 'mine' : ''}`}>
@@ -159,10 +256,10 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
             </span>
           )}
         </div>
-        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} right />
+        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} reaction={reaction?.role === rival ? reaction : null} right />
       </header>
 
-      <MoveBanner room={room} role={myRole} />
+      <MoveBanner room={room} role={myRole} streaks={streaks} />
 
       {!hotseat && (
         <div className="board-tabs">
@@ -232,7 +329,28 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
         <p className="kb-hint">Letters your rival has uncovered. Solved words show gold.</p>
       )}
 
+      {room.status === 'playing' && !hotseat && (
+        <div className="taunt-bar" aria-label="Send a reaction">
+          {TAUNTS.map((e) => (
+            <button key={e} className="taunt-btn" type="button" onClick={() => sendTaunt(e)}>{e}</button>
+          ))}
+        </div>
+      )}
+
       <button className="btn ghost leave" onClick={onLeave}>Leave</button>
+
+      {tauntShow && (
+        <div key={tauntShow.ts} className="taunt-fly" aria-hidden>
+          <span>{tauntShow.emoji}</span>
+        </div>
+      )}
+
+      {toast && (
+        <div className="ach-toast" role="status">
+          <span className="ach-emoji">{toast.emoji}</span>
+          <span><strong>Achievement unlocked!</strong><br />{toast.name} — {toast.desc}</span>
+        </div>
+      )}
 
       {solving !== null && (
         <SolveModal
@@ -272,10 +390,10 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   )
 }
 
-function PlayerBadge({ player, label, active, score, right }) {
+function PlayerBadge({ player, label, active, score, right, reaction }) {
   return (
     <div className={`player-badge ${active ? 'active' : ''} ${right ? 'right' : ''}`}>
-      <span className="badge-avatar">{player.avatar}</span>
+      <span key={reaction?.ts || 'still'} className={`badge-avatar ${reaction ? `react-${reaction.kind}` : ''}`}>{player.avatar}</span>
       <span className="badge-text">
         <span className="badge-name">{player.name}</span>
         <span className="badge-score">{score}/5 solved</span>
@@ -284,15 +402,19 @@ function PlayerBadge({ player, label, active, score, right }) {
   )
 }
 
-function MoveBanner({ room, role }) {
+function MoveBanner({ room, role, streaks }) {
   const m = room.lastMove
   if (!m || room.status !== 'playing') return <div className="move-banner empty" />
   const actor = m.by === role ? 'You' : room.players[m.by].name
+  const streak = streaks?.[m.by] || 0
   let text
   if (m.type === 'letter') {
-    text = m.correct
-      ? `${actor} called "${m.letter.toUpperCase()}" — ${m.hits} hit${m.hits > 1 ? 's' : ''}! 🔥`
-      : `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
+    if (m.correct) {
+      const flair = streak >= 5 ? ' 🌋 UNSTOPPABLE!' : streak >= 3 ? ' 🔥 On fire!' : ''
+      text = `${actor} called "${m.letter.toUpperCase()}" — ${m.hits} hit${m.hits > 1 ? 's' : ''}!${flair}`
+    } else {
+      text = `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
+    }
   } else {
     if (m.type === 'pass') {
       text = `${actor} passed on solving 👋`
@@ -456,27 +578,19 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
           <>
             <span className="end-emoji">🏆</span>
             <h2>{winner.avatar} {winner.name} wins!</h2>
+            <p className="end-title">{pickTitle(WIN_TITLES, room)}</p>
             <p className="hint">All five of {room.players[loserRole].name}'s words — cracked.</p>
-            <div className="final-words">
-              <span className="final-label">{room.players[loserRole].name}'s words were:</span>
-              <div className="final-list">
-                {(room.players[loserRole].words || []).map((w) => <span key={w} className="word-chip">{w}</span>)}
-              </div>
-            </div>
+            <FinalWords label={`${room.players[loserRole].name}'s words were:`} words={room.players[loserRole].words} />
           </>
         ) : (
           <>
             <span className="end-emoji">{won ? '🏆' : '💥'}</span>
             <h2>{won ? 'Victory!' : 'Defeated'}</h2>
+            <p className="end-title">{won ? pickTitle(WIN_TITLES, room) : pickTitle(LOSE_TITLES, room)}</p>
             <p className="hint">
               {won ? 'You cracked all five words.' : `${room.players[rival].name} cracked your board first.`}
             </p>
-            <div className="final-words">
-              <span className="final-label">{room.players[rival].name}'s words were:</span>
-              <div className="final-list">
-                {(room.players[rival].words || []).map((w) => <span key={w} className="word-chip">{w}</span>)}
-              </div>
-            </div>
+            <FinalWords label={`${room.players[rival].name}'s words were:`} words={room.players[rival].words} />
           </>
         )}
         <div className="row">
@@ -487,6 +601,24 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
             </button>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// The losing side's words flip in one at a time, wheel-of-fortune style.
+function FinalWords({ label, words }) {
+  return (
+    <div className="final-words">
+      <span className="final-label">{label}</span>
+      <div className="final-list">
+        {(words || []).map((w, wi) => (
+          <span key={w} className="final-word">
+            {[...w].map((ch, li) => (
+              <span key={li} className="tile revealed fresh gold" style={{ '--d': `${wi * 0.5 + li * 0.09}s` }}>{ch}</span>
+            ))}
+          </span>
+        ))}
       </div>
     </div>
   )

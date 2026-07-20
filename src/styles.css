@@ -748,6 +748,155 @@ h3 { margin: 0; }
 .final-label { color: var(--ink-dim); font-size: 0.8rem; }
 .final-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
+/* ── Fun & juice ──────────────────────────────────────────────── */
+.screen.shake, .screen.daily.shake { animation: screen-shake 0.5s; }
+@keyframes screen-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-9px); }
+  35% { transform: translateX(8px); }
+  55% { transform: translateX(-6px); }
+  75% { transform: translateX(4px); }
+  90% { transform: translateX(-2px); }
+}
+
+.badge-avatar { display: inline-block; }
+.react-bounce { animation: avatar-bounce 0.55s; }
+.react-spin { animation: avatar-spin 0.7s; }
+.react-droop { animation: avatar-droop 0.9s; }
+@keyframes avatar-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-10px) scale(1.15); }
+  65% { transform: translateY(2px); }
+}
+@keyframes avatar-spin {
+  0% { transform: rotate(0) scale(1); }
+  60% { transform: rotate(360deg) scale(1.25); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+@keyframes avatar-droop {
+  0%, 100% { transform: rotate(0); }
+  30% { transform: rotate(-18deg) translateY(3px); }
+  60% { transform: rotate(-12deg) translateY(3px); }
+}
+
+.taunt-bar { display: flex; gap: 8px; justify-content: center; margin-top: 2px; }
+.taunt-btn {
+  font-size: 1.15rem;
+  padding: 6px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.taunt-btn:active { transform: scale(1.25); }
+.taunt-fly {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+}
+.taunt-fly span {
+  font-size: 5rem;
+  animation: taunt-pop 1.6s ease-out forwards;
+}
+@keyframes taunt-pop {
+  0% { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+  20% { transform: scale(1.4) rotate(8deg); opacity: 1; }
+  40% { transform: scale(1) rotate(-4deg); }
+  75% { transform: scale(1.05) translateY(-30px); opacity: 1; }
+  100% { transform: scale(0.8) translateY(-120px); opacity: 0; }
+}
+
+.ach-toast {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  background: #171c36;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+  z-index: 60;
+  animation: toast-in 0.35s ease-out;
+  max-width: 90vw;
+}
+.ach-emoji { font-size: 1.6rem; }
+@keyframes toast-in {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.ach-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.ach-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 70px;
+  padding: 8px 4px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.ach-badge.earned { opacity: 1; filter: none; border-color: var(--gold); }
+.ach-badge-emoji { font-size: 1.3rem; }
+.ach-badge-name { font-size: 0.6rem; text-align: center; color: var(--ink-dim); }
+
+.end-title { margin: 2px 0 0; font-weight: 800; color: var(--gold); font-size: 1rem; }
+.final-word { display: flex; gap: 3px; }
+.final-word .tile { width: 26px; height: 32px; font-size: 0.85rem; }
+.final-list { flex-direction: column; align-items: center; gap: 8px; display: flex; }
+
+.welcome-toast {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  pointer-events: none;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  animation: welcome-fade 4.2s forwards;
+}
+@keyframes welcome-fade {
+  0% { opacity: 0; }
+  10%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.welcome-confetti { position: absolute; inset: 0; overflow: hidden; }
+.welcome-confetti span {
+  position: absolute;
+  top: -12px;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  animation: welcome-drop 2.8s linear infinite;
+}
+@keyframes welcome-drop {
+  to { transform: translateY(105vh) rotate(540deg); }
+}
+
+.daily-board { margin-top: 8px; }
+.daily-input { width: 150px; letter-spacing: 0.35em; }
+.daily-solve { align-items: center; }
+
 /* ── Fireworks on a correct solve ─────────────────────────────── */
 .fireworks { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 45; }
 .burst { position: absolute; width: 0; height: 0; }

@@ -197,6 +197,7 @@ export function rematchResetPatch() {
     startedAt: null,
     winner: null,
     rematch: null,
+    taunt: null,
     turn: 'host'
   }
 }
