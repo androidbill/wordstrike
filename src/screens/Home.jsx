@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { APP_VERSION } from '../version.js'
 
-export default function Home({ onCreate, onJoin, error }) {
+export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
 
@@ -30,6 +30,10 @@ export default function Home({ onCreate, onJoin, error }) {
         <div className="home-actions">
           <button className="btn primary big" onClick={onCreate}>Create Room</button>
           <button className="btn ghost big" onClick={() => setJoining(true)}>Join Room</button>
+          <button className="btn ghost big" onClick={onHotseat}>
+            🤝 Pass &amp; Play
+            <span className="btn-sub">one device · works offline</span>
+          </button>
         </div>
       ) : (
         <form className="home-actions" onSubmit={submitJoin}>
@@ -56,6 +60,7 @@ export default function Home({ onCreate, onJoin, error }) {
           <li>Take turns calling a letter — it lights up everywhere it appears in your rival's five words.</li>
           <li>On your turn you can instead try to solve a word. Solve it right and you go again; miss and you lose the turn.</li>
           <li>First to crack all five of their rival's words wins.</li>
+          <li>No internet? Pass &amp; Play shares one device — a curtain screen keeps words secret between turns.</li>
         </ul>
       </details>
 

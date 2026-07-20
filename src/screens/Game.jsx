@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getStore } from '../net/store.js'
+import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  letterMovePatch, solveMovePatch
+  letterMovePatch, solveMovePatch, rematchResetPatch
 } from '../game.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
-export default function Game({ room, role, onLeave }) {
-  const rival = otherRole(role)
-  const me = room.players[role]
+export default function Game({ room, role, store, hotseat, onLeave }) {
+  // Hotseat: one device, so the "viewing" role follows whoever holds the
+  // phone; a curtain gates each handoff. Online: the role is fixed.
+  const [activeRole, setActiveRole] = useState(room.turn)
+  const [handoff, setHandoff] = useState(hotseat) // curtain up at game start
+  const myRole = hotseat ? activeRole : role
+  const rival = otherRole(myRole)
+  const me = room.players[myRole]
   const them = room.players[rival]
-  const myTurn = room.turn === role && room.status === 'playing'
+  const myTurn = room.turn === myRole && room.status === 'playing'
   const [view, setView] = useState('attack') // 'attack' | 'defend'
   const [solving, setSolving] = useState(null) // word index
   const busyRef = useRef(false)
@@ -19,73 +24,70 @@ export default function Game({ room, role, onLeave }) {
   const fire = async (patch) => {
     if (busyRef.current) return
     busyRef.current = true
-    const store = await getStore()
     await store.update(room.code, patch)
     busyRef.current = false
   }
 
   const callLetter = (letter) => {
-    if (!myTurn || guessedBy(room, role)[letter]) return
-    fire(letterMovePatch(room, role, letter))
+    if (!myTurn || guessedBy(room, myRole)[letter]) return
+    fire(letterMovePatch(room, myRole, letter))
   }
 
   const submitSolve = (wordIndex, attempt) => {
     setSolving(null)
-    fire(solveMovePatch(room, role, wordIndex, attempt))
+    fire(solveMovePatch(room, myRole, wordIndex, attempt))
   }
 
-  // Host referees the rematch: when both flags are up, reset to the lobby.
+  // Hotseat handoff: once the turn flips away from the player holding the
+  // phone, give them a moment to watch the reveal, then drop the curtain.
   useEffect(() => {
-    if (role !== 'host' || room.status !== 'finished') return
-    if (room.rematch?.host && room.rematch?.guest) {
-      fire({
-        status: 'lobby',
-        'players/host/words': null,
-        'players/host/ready': false,
-        'players/guest/words': null,
-        'players/guest/ready': false,
-        guessed: null,
-        solved: null,
-        lastMove: null,
-        winner: null,
-        rematch: null,
-        turn: 'host'
-      })
-    }
-  }, [room, role])
+    if (!hotseat || room.status !== 'playing' || room.turn === activeRole) return
+    const t = setTimeout(() => setHandoff(true), 1800)
+    return () => clearTimeout(t)
+  }, [hotseat, room.turn, room.status, activeRole])
 
-  const opponentLeft = room.left?.[rival]
+  // Host referees the online rematch: when both flags are up, reset.
+  useEffect(() => {
+    if (hotseat || role !== 'host' || room.status !== 'finished') return
+    if (room.rematch?.host && room.rematch?.guest) {
+      fire(rematchResetPatch())
+    }
+  }, [room, role, hotseat])
+
+  const opponentLeft = !hotseat && room.left?.[rival]
 
   return (
     <div className="screen game">
       <header className="game-header">
-        <PlayerBadge player={me} label="You" active={room.turn === role && room.status === 'playing'} score={solvedCount(room, role)} />
+        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} />
         <div className="turn-pill-wrap">
           {room.status === 'playing' && (
             <span className={`turn-pill ${myTurn ? 'mine' : ''}`}>
-              {myTurn ? 'Your turn' : `${them.name}'s turn`}
+              {myTurn ? (hotseat ? `${me.name}'s turn` : 'Your turn') : `${them.name}'s turn`}
             </span>
           )}
         </div>
-        <PlayerBadge player={them} label="Rival" active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} right />
+        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} right />
       </header>
 
-      <MoveBanner room={room} role={role} />
+      <MoveBanner room={room} role={myRole} />
 
-      <div className="board-tabs">
-        <button className={`tab ${view === 'attack' ? 'on' : ''}`} onClick={() => setView('attack')}>
-          ⚔️ {them.name}'s words
-        </button>
-        <button className={`tab ${view === 'defend' ? 'on' : ''}`} onClick={() => setView('defend')}>
-          🛡️ Your words
-        </button>
-      </div>
+      {!hotseat && (
+        <div className="board-tabs">
+          <button className={`tab ${view === 'attack' ? 'on' : ''}`} onClick={() => setView('attack')}>
+            ⚔️ {them.name}'s words
+          </button>
+          <button className={`tab ${view === 'defend' ? 'on' : ''}`} onClick={() => setView('defend')}>
+            🛡️ Your words
+          </button>
+        </div>
+      )}
 
-      {view === 'attack' ? (
+      {view === 'attack' || hotseat ? (
         <Board
-          words={targetWords(room, role)}
-          guessed={guessedBy(room, role)}
-          solved={solvedBy(room, role)}
+          words={targetWords(room, myRole)}
+          guessed={guessedBy(room, myRole)}
+          solved={solvedBy(room, myRole)}
           canSolve={myTurn}
           onSolve={setSolving}
           animate
@@ -99,13 +101,19 @@ export default function Game({ room, role, onLeave }) {
         />
       )}
 
-      {view === 'attack' && room.status === 'playing' && (
+      {(view === 'attack' || hotseat) && room.status === 'playing' && (
         <>
-          <p className="kb-hint">{myTurn ? 'Call a letter — or tap a word to solve it' : 'Waiting for your rival…'}</p>
-          <Keyboard guessed={guessedBy(room, role)} disabled={!myTurn} onKey={callLetter} />
+          <p className="kb-hint">
+            {myTurn
+              ? 'Call a letter — or tap a word to solve it'
+              : hotseat
+                ? `Nice — hand the phone to ${them.name} when you're ready`
+                : 'Waiting for your rival…'}
+          </p>
+          <Keyboard guessed={guessedBy(room, myRole)} disabled={!myTurn} onKey={callLetter} />
         </>
       )}
-      {view === 'defend' && room.status === 'playing' && (
+      {view === 'defend' && !hotseat && room.status === 'playing' && (
         <p className="kb-hint">Letters your rival has uncovered. Solved words show gold.</p>
       )}
 
@@ -113,16 +121,35 @@ export default function Game({ room, role, onLeave }) {
 
       {solving !== null && (
         <SolveModal
-          word={targetWords(room, role)[solving]}
+          word={targetWords(room, myRole)[solving]}
           index={solving}
-          guessed={guessedBy(room, role)}
+          guessed={guessedBy(room, myRole)}
           onSubmit={submitSolve}
           onClose={() => setSolving(null)}
         />
       )}
 
       {(room.status === 'finished' || opponentLeft) && (
-        <EndOverlay room={room} role={role} onLeave={onLeave} onRematch={() => fire({ [`rematch/${role}`]: true })} opponentLeft={opponentLeft} />
+        <EndOverlay
+          room={room}
+          role={myRole}
+          hotseat={hotseat}
+          onLeave={onLeave}
+          onRematch={() => fire(hotseat ? rematchResetPatch() : { [`rematch/${myRole}`]: true })}
+          opponentLeft={opponentLeft}
+        />
+      )}
+
+      {hotseat && handoff && room.status === 'playing' && (
+        <Curtain
+          avatar={room.players[room.turn].avatar}
+          name={room.players[room.turn].name}
+          hint="No peeking while the phone changes hands!"
+          onReady={() => {
+            setActiveRole(room.turn)
+            setHandoff(false)
+          }}
+        />
       )}
     </div>
   )
@@ -272,20 +299,34 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
   )
 }
 
-function EndOverlay({ room, role, onLeave, onRematch, opponentLeft }) {
+function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
   const won = room.winner === role
   const rival = otherRole(role)
-  const iWantRematch = room.rematch?.[role]
-  const theyWantRematch = room.rematch?.[rival]
+  const winner = room.winner ? room.players[room.winner] : null
+  const loserRole = room.winner ? otherRole(room.winner) : rival
+  const iWantRematch = !hotseat && room.rematch?.[role]
+  const theyWantRematch = !hotseat && room.rematch?.[rival]
 
   return (
     <div className="end-overlay">
-      {won && <Confetti />}
+      {(won || (hotseat && winner)) && <Confetti />}
       <div className="end-card">
         {opponentLeft && !room.winner ? (
           <>
             <span className="end-emoji">🚪</span>
             <h2>Rival left the room</h2>
+          </>
+        ) : hotseat ? (
+          <>
+            <span className="end-emoji">🏆</span>
+            <h2>{winner.avatar} {winner.name} wins!</h2>
+            <p className="hint">All five of {room.players[loserRole].name}'s words — cracked.</p>
+            <div className="final-words">
+              <span className="final-label">{room.players[loserRole].name}'s words were:</span>
+              <div className="final-list">
+                {(room.players[loserRole].words || []).map((w) => <span key={w} className="word-chip">{w}</span>)}
+              </div>
+            </div>
           </>
         ) : (
           <>

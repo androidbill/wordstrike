@@ -105,3 +105,20 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
 export function solvedCount(room, role) {
   return solvedBy(room, role).filter(Boolean).length
 }
+
+// Reset patch for a rematch: same players, fresh boards, back to word picking.
+export function rematchResetPatch() {
+  return {
+    status: 'lobby',
+    'players/host/words': null,
+    'players/host/ready': false,
+    'players/guest/words': null,
+    'players/guest/ready': false,
+    guessed: null,
+    solved: null,
+    lastMove: null,
+    winner: null,
+    rematch: null,
+    turn: 'host'
+  }
+}
