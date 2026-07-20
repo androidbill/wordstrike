@@ -569,7 +569,14 @@ h3 { margin: 0; }
 .player-status { color: var(--ink-dim); font-size: 0.78rem; }
 
 /* ── Game ──────────────────────────────────────────────────────── */
-.game { gap: 12px; padding-bottom: 20px; }
+/* Fill the viewport and spread any spare height between sections, so the
+   layout never leaves a clump of dead space at the bottom. */
+.game {
+  gap: 12px;
+  padding-bottom: 20px;
+  flex: 1;
+  justify-content: space-evenly;
+}
 
 /* Fit the whole game on one phone screen — no scrolling to find buttons. */
 @media (max-height: 850px) {
