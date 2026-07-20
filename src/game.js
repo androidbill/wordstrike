@@ -51,6 +51,7 @@ export function startPlayingPatch() {
   return {
     status: 'playing',
     turn,
+    startedAt: Date.now(),
     letterUntil: Date.now() + LETTER_WINDOW_MS,
     solveUntil: null,
     lastMove: null
@@ -193,6 +194,7 @@ export function rematchResetPatch() {
     lastMove: null,
     letterUntil: null,
     solveUntil: null,
+    startedAt: null,
     winner: null,
     rematch: null,
     turn: 'host'

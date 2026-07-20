@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  LETTER_WINDOW_MS, letterMovePatch, solveMovePatch, letterWindowExpiredPatch,
-  solveWindowExpiredPatch, passSolvePatch, rematchResetPatch
+  LETTER_WINDOW_MS, SOLVE_WINDOW_MS, letterMovePatch, solveMovePatch,
+  letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
+  rematchResetPatch
 } from '../game.js'
+import { addGame } from '../history.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
@@ -90,6 +92,46 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     if (room.rematch?.host && room.rematch?.guest) {
       fire(rematchResetPatch())
     }
+  }, [room, hotseat])
+
+  // Track the fastest correct solve of this game. The previous room state
+  // holds the solveUntil deadline the solve raced against.
+  const prevRoomRef = useRef(room)
+  const fastestRef = useRef(null)
+  useEffect(() => {
+    const prev = prevRoomRef.current
+    prevRoomRef.current = room
+    const m = room.lastMove
+    if (!m || m === prev.lastMove || m.type !== 'solve' || !m.correct) return
+    if (!prev.solveUntil) return
+    const ms = m.ts - (prev.solveUntil - SOLVE_WINDOW_MS)
+    if (ms >= 0 && (!fastestRef.current || ms < fastestRef.current.ms)) {
+      fastestRef.current = { name: room.players[m.by].name, ms }
+    }
+  }, [room])
+
+  // Record the finished game once per playthrough (rematches reset startedAt).
+  const recordedRef = useRef(null)
+  useEffect(() => {
+    if (room.status !== 'finished' || !room.winner) return
+    const key = `${room.code}:${room.startedAt || 0}`
+    if (recordedRef.current === key) return
+    recordedRef.current = key
+    addGame({
+      ts: Date.now(),
+      mode: hotseat ? 'hotseat' : 'online',
+      code: room.code,
+      players: {
+        host: { name: room.players.host.name, avatar: room.players.host.avatar },
+        guest: { name: room.players.guest.name, avatar: room.players.guest.avatar }
+      },
+      winnerName: room.players[room.winner].name,
+      winnerAvatar: room.players[room.winner].avatar,
+      scores: { host: solvedCount(room, 'host'), guest: solvedCount(room, 'guest') },
+      durationMs: room.startedAt ? Date.now() - room.startedAt : null,
+      fastestSolve: fastestRef.current
+    })
+    fastestRef.current = null
   }, [room, hotseat])
 
   const opponentLeft = !hotseat && room.left?.[rival]

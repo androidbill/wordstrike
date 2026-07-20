@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { APP_VERSION } from '../version.js'
 import { hardRefresh } from '../appUpdates.js'
 import QRModal from './QRModal.jsx'
+import { loadHistory, historyStats, formatDuration } from '../history.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
@@ -11,6 +12,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const shareApp = async () => {
     setMenuOpen(false)
@@ -62,6 +64,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
             <div className="menu-pop">
               <button className="menu-item" type="button" onClick={hardRefresh}>↻ Refresh</button>
               <button className="menu-item" type="button" onClick={shareApp}>↗ Share</button>
+              <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}>🏆 History</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>
             </div>
           </>
@@ -120,6 +123,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
       </details>
 
       <span className="version">v{APP_VERSION}</span>
+      {historyOpen && <HistoryModal onClose={() => setHistoryOpen(false)} />}
       {qrOpen && (
         <QRModal
           url={APP_URL}
@@ -139,6 +143,59 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function HistoryModal({ onClose }) {
+  const history = loadHistory()
+  const stats = historyStats(history)
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="history-title" onClick={onClose}>
+      <div className="modal-card history-card" onClick={(e) => e.stopPropagation()}>
+        <h2 id="history-title">Game history</h2>
+        {history.length === 0 ? (
+          <p className="hint">No games finished on this device yet. Go play one!</p>
+        ) : (
+          <>
+            <div className="history-stats">
+              <div className="stat">
+                <span className="stat-value">{stats.games}</span>
+                <span className="stat-label">games</span>
+              </div>
+              {stats.topWinner && (
+                <div className="stat">
+                  <span className="stat-value">{stats.topWinner.name}</span>
+                  <span className="stat-label">{stats.topWinner.wins} win{stats.topWinner.wins > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {stats.fastestSolve && (
+                <div className="stat">
+                  <span className="stat-value">{(stats.fastestSolve.ms / 1000).toFixed(1)}s</span>
+                  <span className="stat-label">fastest solve · {stats.fastestSolve.name}</span>
+                </div>
+              )}
+            </div>
+            <div className="history-list">
+              {history.map((g, i) => (
+                <div key={i} className="history-row">
+                  <span className="history-winner">{g.winnerAvatar} {g.winnerName} 🏆</span>
+                  <span className="history-detail">
+                    {g.players.host.name} {g.scores.host}–{g.scores.guest} {g.players.guest.name}
+                  </span>
+                  <span className="history-meta">
+                    {new Date(g.ts).toLocaleDateString()} · {formatDuration(g.durationMs)}
+                    {g.fastestSolve ? ` · ⚡${(g.fastestSolve.ms / 1000).toFixed(1)}s` : ''}
+                    {g.mode === 'hotseat' ? ' · 🤝' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <button className="btn ghost" type="button" onClick={onClose}>Close</button>
+      </div>
     </div>
   )
 }
