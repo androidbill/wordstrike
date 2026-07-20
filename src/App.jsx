@@ -136,7 +136,12 @@ export default function App() {
     }
     saveProfile(p)
     if (flow.mode === 'create') {
-      setFlow({ ...flow, step: 'words' })
+      // Create the room now; words are picked after the guest joins.
+      const code = makeRoomCode()
+      const store = await getStore()
+      await store.createRoom(code, newRoom(code, { name: p.name, avatar: p.avatar }, null))
+      enterSession(code, 'host')
+      return
     } else {
       // Claim the guest seat now so the room reads as full.
       const store = await getStore()
@@ -151,13 +156,6 @@ export default function App() {
       })
       enterSession(flow.code, 'guest')
     }
-  }
-
-  const onHostWordsDone = async (words) => {
-    const store = await getStore()
-    const code = makeRoomCode()
-    await store.createRoom(code, newRoom(code, { name: profile.name, avatar: profile.avatar }, words))
-    enterSession(code, 'host')
   }
 
   const onRoomWordsDone = async (words) => {
@@ -209,11 +207,15 @@ export default function App() {
         }
       } else {
         const me = room.players[session.role]
-        screen = me?.words ? (
-          <Lobby room={room} role={session.role} onLeave={leaveRoom} />
-        ) : (
-          <Words title="Pick your 5 words" onDone={onRoomWordsDone} onBack={leaveRoom} />
-        )
+        const guest = room.players.guest
+        if (me?.words) {
+          screen = <Lobby room={room} role={session.role} onLeave={leaveRoom} />
+        } else if (session.role === 'host' && !guest) {
+          // Host waiting for guest to arrive before picking words.
+          screen = <Lobby room={room} role={session.role} onLeave={leaveRoom} />
+        } else {
+          screen = <Words title="Pick your 5 words" onDone={onRoomWordsDone} onBack={leaveRoom} />
+        }
       }
     } else {
       screen = <Game room={room} role={session.role} store={store} hotseat={!!session.hotseat} onLeave={leaveRoom} />
@@ -224,8 +226,6 @@ export default function App() {
     screen = <Profile title="Player 1, who are you?" initial={profile} onDone={onProfileDone} onBack={() => setFlow(null)} />
   } else if (flow?.step === 'profile2') {
     screen = <Profile key="p2" title="Player 2, who are you?" initial={null} onDone={onProfileDone} onBack={() => setFlow({ ...flow, step: 'profile1' })} />
-  } else if (flow?.step === 'words') {
-    screen = <Words title="Pick your 5 words" onDone={onHostWordsDone} onBack={() => setFlow({ ...flow, step: 'profile' })} />
   } else {
     screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} error={error} />
   }

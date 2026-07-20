@@ -31,7 +31,7 @@ export function newRoom(code, hostProfile, hostWords) {
     createdAt: Date.now(),
     status: 'lobby',
     players: {
-      host: { ...hostProfile, words: hostWords, ready: true },
+      host: { ...hostProfile, words: hostWords, ready: hostWords != null },
       guest: null
     },
     turn: 'host',
@@ -111,8 +111,16 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
   const correct = attempt.toLowerCase() === words[wordIndex]
   const nextSolved = solvedBy(room, role).map((s, i) => (i === wordIndex ? s || correct : s))
   const won = nextSolved.every(Boolean)
+  // On correct solve, reveal all letters of that word in the guessed set.
+  const nextGuessed = correct
+    ? [...words[wordIndex]].reduce(
+        (g, ch) => (g[ch] ? g : { ...g, [ch]: 'hit' }),
+        guessedBy(room, role)
+      )
+    : undefined
   return {
     [`solved/${role}`]: nextSolved,
+    ...(nextGuessed ? { [`guessed/${role}`]: nextGuessed } : {}),
     turn: correct ? role : otherRole(role),
     letterUntil: correct || won ? null : Date.now() + LETTER_WINDOW_MS,
     solveUntil: correct && !won ? Date.now() + SOLVE_WINDOW_MS : null,

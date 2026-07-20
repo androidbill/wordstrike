@@ -24,10 +24,10 @@ export default function Lobby({ room, role, onLeave }) {
       </button>
 
       <div className="versus">
-        <div className="player-card ready">
+        <div className={`player-card ${me?.ready ? 'ready' : ''}`}>
           <span className="player-avatar">{me.avatar}</span>
           <span className="player-name">{me.name}</span>
-          <span className="player-status">Ready ✓</span>
+          <span className="player-status">{me?.ready ? 'Ready ✓' : 'Picking words…'}</span>
         </div>
         <span className="vs">VS</span>
         <div className={`player-card ${them?.ready ? 'ready' : ''}`}>
