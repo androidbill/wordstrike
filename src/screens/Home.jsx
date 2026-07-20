@@ -3,13 +3,14 @@ import { APP_VERSION } from '../version.js'
 import { hardRefresh } from '../appUpdates.js'
 import QRModal from './QRModal.jsx'
 import Daily from './Daily.jsx'
+import Tutorial from './Tutorial.jsx'
 import { loadHistory, historyStats, formatDuration, formatSolveTime } from '../history.js'
 import { ACHIEVEMENTS, loadEarned } from '../achievements.js'
 import { isMuted, toggleMuted } from '../sounds.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
-export default function Home({ onCreate, onJoin, onHotseat, error }) {
+export default function Home({ onCreate, onJoin, onHotseat, onPractice, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -19,6 +20,8 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
   const [dailyOpen, setDailyOpen] = useState(false)
   const [muted, setMuted] = useState(isMuted)
   const [welcome, setWelcome] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const showTutorialNudge = !localStorage.getItem('ws-tutorial-done')
 
   // First launch on this device: greet with confetti.
   useEffect(() => {
@@ -50,6 +53,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
   }
 
   if (dailyOpen) return <Daily onBack={() => setDailyOpen(false)} />
+  if (tutorialOpen) return <Tutorial onDone={() => setTutorialOpen(false)} />
 
   const submitJoin = (e) => {
     e.preventDefault()
@@ -85,6 +89,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
               <button className="menu-item" type="button" onClick={() => setMuted(toggleMuted())}>
                 {muted ? '🔇 Sound off' : '🔊 Sound on'}
               </button>
+              <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setTutorialOpen(true) }}>🎓 Tutorial</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}>🏆 History</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>
             </div>
@@ -113,10 +118,19 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
             🤝 Pass &amp; Play
             <span className="btn-sub">one device · works offline</span>
           </button>
+          <button className="btn ghost big" onClick={onPractice}>
+            🤖 Practice
+            <span className="btn-sub">vs the bot · three difficulties</span>
+          </button>
           <button className="btn ghost big" onClick={() => setDailyOpen(true)}>
             📅 Daily Word
             <span className="btn-sub">one word a day · brag to your friends</span>
           </button>
+          {showTutorialNudge && (
+            <button className="btn ghost tut-nudge" onClick={() => setTutorialOpen(true)}>
+              🎓 New here? Try the 60-second tutorial
+            </button>
+          )}
         </div>
       ) : (
         <form className="home-actions" onSubmit={submitJoin}>

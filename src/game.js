@@ -2,19 +2,26 @@
 // Room document:
 // {
 //   code, createdAt, status: 'lobby' | 'playing' | 'finished',
-//   players: { host: {name, avatar, words: [5]|null, ready}, guest: {...}|null },
+//   pace: 'live' | 'async', blitz: bool, wordCount: 3 | 5,
+//   players: { host: {name, avatar, words: [N]|null, ready}, guest: {...}|null },
 //   turn: 'host' | 'guest',
 //   guessed: { host: {a:'hit'|'miss', ...}, guest: {...} },   // letters fired BY that role
-//   solved:  { host: [bool x5], guest: [bool x5] },           // opponent words solved BY that role
-//   lastMove: { by, type:'letter'|'solve', letter?, wordIndex?, correct, hits?, ts },
+//   solved:  { host: [bool xN], guest: [bool xN] },           // opponent words solved BY that role
+//   lastMove: { by, type:'letter'|'solve'|'pass'|'timeout'|'powerup', ... },
+//   powerups: { host: 'reveal'|'time'|'double'|'used'|null, guest: ... },  // null = unused
+//   doubleStrike: 'host' | 'guest' | null,   // that role's next letter doesn't open solve yet
 //   winner: 'host' | 'guest' | null,
-//   left: { host?: true, guest?: true }
+//   left: { host?: true, guest?: true },
+//   seen: { host: ts, guest: ts }            // heartbeat for presence
 // }
 
 // Letters only (no digits; I/L/O dropped to avoid look-alikes).
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ'
 export const SOLVE_WINDOW_MS = 10_000
 export const LETTER_WINDOW_MS = 20_000
+export const BLITZ_LETTER_MS = 7_000
+export const BLITZ_SOLVE_MS = 6_000
+export const PAUSE_WINDOW_MS = 5 * 60_000
 
 export function makeRoomCode() {
   let code = ''
@@ -26,18 +33,52 @@ export function otherRole(role) {
   return role === 'host' ? 'guest' : 'host'
 }
 
-export function newRoom(code, hostProfile, hostWords) {
+export function wordCountOf(room) {
+  return room.wordCount || 5
+}
+
+export function isAsync(room) {
+  return room.pace === 'async'
+}
+
+export function windows(room) {
+  if (isAsync(room)) return { letter: null, solve: null }
+  if (room.blitz) return { letter: BLITZ_LETTER_MS, solve: BLITZ_SOLVE_MS }
+  return { letter: LETTER_WINDOW_MS, solve: SOLVE_WINDOW_MS }
+}
+
+function letterDeadline(room) {
+  const w = windows(room)
+  return w.letter ? Date.now() + w.letter : null
+}
+
+function solveDeadline(room) {
+  const w = windows(room)
+  return w.solve ? Date.now() + w.solve : null
+}
+
+function emptySolved(n) {
+  return Array.from({ length: n }, () => false)
+}
+
+export function newRoom(code, hostProfile, hostWords, opts = {}) {
+  const wordCount = opts.wordCount || 5
   return {
     code,
     createdAt: Date.now(),
     status: 'lobby',
+    pace: opts.pace || 'live',
+    blitz: !!opts.blitz,
+    wordCount,
     players: {
       host: { ...hostProfile, words: hostWords, ready: hostWords != null },
       guest: null
     },
     turn: 'host',
     guessed: { host: {}, guest: {} },
-    solved: { host: [false, false, false, false, false], guest: [false, false, false, false, false] },
+    solved: { host: emptySolved(wordCount), guest: emptySolved(wordCount) },
+    powerups: { host: null, guest: null },
+    doubleStrike: null,
     lastMove: null,
     letterUntil: null,
     solveUntil: null,
@@ -46,13 +87,13 @@ export function newRoom(code, hostProfile, hostWords) {
   }
 }
 
-export function startPlayingPatch() {
+export function startPlayingPatch(room) {
   const turn = Math.random() < 0.5 ? 'host' : 'guest'
   return {
     status: 'playing',
     turn,
     startedAt: Date.now(),
-    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    letterUntil: letterDeadline(room),
     solveUntil: null,
     lastMove: null
   }
@@ -68,10 +109,11 @@ export function guessedBy(room, role) {
 }
 
 export function solvedBy(room, role) {
-  // Default to five unsolved slots — Firebase strips empty/false-y branches,
+  // Default to N unsolved slots — Firebase strips empty/false-y branches,
   // and an empty array would read as "all solved".
+  const n = wordCountOf(room)
   const s = room.solved?.[role]
-  return s && s.length === 5 ? s : [false, false, false, false, false]
+  return s && s.length === n ? s : emptySolved(n)
 }
 
 // A letter is visible in a target word if the attacker guessed it or solved that word.
@@ -84,8 +126,9 @@ function isWordFullyRevealed(word, guessedLetters) {
 }
 
 // Build the DB patch for guessing a letter. The caller keeps the turn for a
-// short solve window, regardless of whether the letter hit.
-// Words that become fully revealed by this letter count as solved.
+// solve window, regardless of whether the letter hit. Words that become
+// fully revealed by this letter count as solved. If the caller has a
+// double-strike active, the letter window reopens instead of the solve phase.
 export function letterMovePatch(room, role, letter) {
   const words = targetWords(room, role)
   const hits = words.reduce((n, w) => n + [...w].filter((ch) => ch === letter).length, 0)
@@ -94,15 +137,17 @@ export function letterMovePatch(room, role, letter) {
     (s, i) => s || isWordFullyRevealed(words[i], nextGuessed)
   )
   const won = nextSolved.every(Boolean)
+  const striking = room.doubleStrike === role && !won
   return {
     [`guessed/${role}`]: nextGuessed,
     [`solved/${role}`]: nextSolved,
     turn: role,
-    letterUntil: null,
-    solveUntil: won ? null : Date.now() + SOLVE_WINDOW_MS,
+    doubleStrike: striking ? null : room.doubleStrike || null,
+    letterUntil: striking ? letterDeadline(room) : null,
+    solveUntil: won || striking ? null : solveDeadline(room),
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
-    lastMove: { by: role, type: 'letter', letter, correct: hits > 0, hits, ts: Date.now() }
+    lastMove: { by: role, type: 'letter', letter, correct: hits > 0, hits, striking, ts: Date.now() }
   }
 }
 
@@ -124,38 +169,11 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
     [`solved/${role}`]: nextSolved,
     ...(nextGuessed ? { [`guessed/${role}`]: nextGuessed } : {}),
     turn: correct ? role : otherRole(role),
-    letterUntil: correct || won ? null : Date.now() + LETTER_WINDOW_MS,
-    solveUntil: correct && !won ? Date.now() + SOLVE_WINDOW_MS : null,
+    letterUntil: correct || won ? null : letterDeadline(room),
+    solveUntil: correct && !won ? solveDeadline(room) : null,
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
     lastMove: { by: role, type: 'solve', wordIndex, correct, ts: Date.now() }
-  }
-}
-
-export const PAUSE_WINDOW_MS = 5 * 60_000
-
-// Freeze the game: remember the live deadlines so resume can restore
-// whatever time was left on them.
-export function pauseGamePatch(room, role) {
-  return {
-    paused: {
-      by: role,
-      at: Date.now(),
-      until: Date.now() + PAUSE_WINDOW_MS,
-      letterUntil: room.letterUntil || null,
-      solveUntil: room.solveUntil || null
-    }
-  }
-}
-
-// Resume: restore the deadlines shifted by however long the pause lasted.
-export function resumeGamePatch(room) {
-  const p = room.paused
-  const elapsed = Date.now() - p.at
-  return {
-    paused: null,
-    letterUntil: p.letterUntil ? p.letterUntil + elapsed : null,
-    solveUntil: p.solveUntil ? p.solveUntil + elapsed : null
   }
 }
 
@@ -163,7 +181,7 @@ export function resumeGamePatch(room) {
 export function passSolvePatch(room) {
   return {
     turn: otherRole(room.turn),
-    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    letterUntil: letterDeadline(room),
     solveUntil: null,
     lastMove: {
       by: room.turn,
@@ -177,7 +195,7 @@ export function passSolvePatch(room) {
 export function solveWindowExpiredPatch(room) {
   return {
     turn: otherRole(room.turn),
-    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    letterUntil: letterDeadline(room),
     solveUntil: null,
     lastMove: {
       by: room.turn,
@@ -192,7 +210,7 @@ export function solveWindowExpiredPatch(room) {
 export function letterWindowExpiredPatch(room) {
   return {
     turn: otherRole(room.turn),
-    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    letterUntil: letterDeadline(room),
     solveUntil: null,
     lastMove: {
       by: room.turn,
@@ -204,12 +222,85 @@ export function letterWindowExpiredPatch(room) {
   }
 }
 
+// ── Power-ups (one per player per game) ─────────────────────────
+export const POWERUPS = [
+  { id: 'reveal', emoji: '🔍', name: 'X-Ray', desc: 'Reveal a random letter in your rival\'s words' },
+  { id: 'time', emoji: '⏳', name: 'Extra Time', desc: 'Add 20 seconds to your current timer' },
+  { id: 'double', emoji: '⚡', name: 'Double Strike', desc: 'Call two letters this turn' }
+]
+
+// X-Ray: reveal one random letter that appears in unsolved target words and
+// hasn't been guessed. Free — turn and timers unchanged.
+export function revealPowerupPatch(room, role) {
+  const words = targetWords(room, role)
+  const guessed = guessedBy(room, role)
+  const solved = solvedBy(room, role)
+  const pool = new Set()
+  words.forEach((w, i) => {
+    if (!solved[i]) [...w].forEach((ch) => { if (!guessed[ch]) pool.add(ch) })
+  })
+  const options = [...pool]
+  if (!options.length) return null
+  const letter = options[Math.floor(Math.random() * options.length)]
+  const nextGuessed = { ...guessed, [letter]: 'hit' }
+  const nextSolved = solved.map((s, i) => s || isWordFullyRevealed(words[i], nextGuessed))
+  const won = nextSolved.every(Boolean)
+  return {
+    [`guessed/${role}`]: nextGuessed,
+    [`solved/${role}`]: nextSolved,
+    [`powerups/${role}`]: 'used',
+    status: won ? 'finished' : 'playing',
+    winner: won ? role : null,
+    lastMove: { by: role, type: 'powerup', powerup: 'reveal', letter, correct: true, ts: Date.now() }
+  }
+}
+
+export function timePowerupPatch(room, role) {
+  return {
+    [`powerups/${role}`]: 'used',
+    ...(room.solveUntil ? { solveUntil: room.solveUntil + 20_000 } : {}),
+    ...(!room.solveUntil && room.letterUntil ? { letterUntil: room.letterUntil + 20_000 } : {}),
+    lastMove: { by: role, type: 'powerup', powerup: 'time', correct: true, ts: Date.now() }
+  }
+}
+
+export function doublePowerupPatch(room, role) {
+  return {
+    [`powerups/${role}`]: 'used',
+    doubleStrike: role,
+    lastMove: { by: role, type: 'powerup', powerup: 'double', correct: true, ts: Date.now() }
+  }
+}
+
+// ── Pause (live pace only) ──────────────────────────────────────
+export function pauseGamePatch(room, role) {
+  return {
+    paused: {
+      by: role,
+      at: Date.now(),
+      until: Date.now() + PAUSE_WINDOW_MS,
+      letterUntil: room.letterUntil || null,
+      solveUntil: room.solveUntil || null
+    }
+  }
+}
+
+export function resumeGamePatch(room) {
+  const p = room.paused
+  const elapsed = Date.now() - p.at
+  return {
+    paused: null,
+    letterUntil: p.letterUntil ? p.letterUntil + elapsed : null,
+    solveUntil: p.solveUntil ? p.solveUntil + elapsed : null
+  }
+}
+
 export function solvedCount(room, role) {
   return solvedBy(room, role).filter(Boolean).length
 }
 
 // Reset patch for a rematch: same players, fresh boards, back to word picking.
-export function rematchResetPatch() {
+export function rematchResetPatch(room) {
   return {
     status: 'lobby',
     'players/host/words': null,
@@ -217,7 +308,9 @@ export function rematchResetPatch() {
     'players/guest/words': null,
     'players/guest/ready': false,
     guessed: null,
-    solved: null,
+    solved: { host: emptySolved(wordCountOf(room)), guest: emptySolved(wordCountOf(room)) },
+    powerups: { host: null, guest: null },
+    doubleStrike: null,
     lastMove: null,
     letterUntil: null,
     solveUntil: null,

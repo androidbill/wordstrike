@@ -4,9 +4,16 @@ import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
   LETTER_WINDOW_MS, letterMovePatch, solveMovePatch,
   letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
-  pauseGamePatch, resumeGamePatch, rematchResetPatch
+  pauseGamePatch, resumeGamePatch, rematchResetPatch,
+  isAsync, wordCountOf, windows,
+  POWERUPS, revealPowerupPatch, timePowerupPatch, doublePowerupPatch
 } from '../game.js'
+import {
+  hapticHit, hapticMiss, hapticSolve, hapticWrong, hapticWin,
+  notifyTurn, requestNotifyPermission
+} from '../haptics.js'
 import { addGame } from '../history.js'
+import { botMovePatch, botWords } from '../bot.js'
 import { playHits, playMiss, playSolve, playWrongSolve, playWin, playTaunt } from '../sounds.js'
 import { earn } from '../achievements.js'
 
@@ -31,7 +38,7 @@ function pickTitle(list, room) {
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
-export default function Game({ room, role, store, hotseat, onLeave }) {
+export default function Game({ room, role, store, hotseat, bot, onLeave }) {
   // Hotseat: one device, so the "viewing" role follows whoever holds the
   // phone; a curtain gates each handoff. Online: the role is fixed.
   const [activeRole, setActiveRole] = useState(room.turn)
@@ -45,11 +52,21 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const [solving, setSolving] = useState(null) // word index
   const [now, setNow] = useState(Date.now())
   const busyRef = useRef(false)
-  const isPaused = !!room.paused && room.status === 'playing'
-  const solveWindowOpen = myTurn && !isPaused && room.solveUntil > now
-  const solveSeconds = solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
-  const letterWindowOpen = myTurn && !isPaused && !room.solveUntil && room.letterUntil > now
-  const letterSeconds = letterWindowOpen ? Math.max(1, Math.ceil((room.letterUntil - now) / 1000)) : 0
+  const relaxed = isAsync(room)
+  const isPaused = !relaxed && !!room.paused && room.status === 'playing'
+  // Relaxed pace: no deadlines. After your letter (or a correct solve) you
+  // are in the solve phase until you solve wrong, pass, or end your turn.
+  const asyncSolvePhase = relaxed && myTurn && room.lastMove?.by === myRole &&
+    (room.lastMove.type === 'letter' || (room.lastMove.type === 'solve' && room.lastMove.correct)) &&
+    !room.lastMove.striking
+  const solveWindowOpen = relaxed
+    ? asyncSolvePhase
+    : myTurn && !isPaused && room.solveUntil > now
+  const solveSeconds = !relaxed && solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
+  const letterWindowOpen = relaxed
+    ? myTurn && !asyncSolvePhase
+    : myTurn && !isPaused && !room.solveUntil && room.letterUntil > now
+  const letterSeconds = !relaxed && letterWindowOpen ? Math.max(1, Math.ceil((room.letterUntil - now) / 1000)) : 0
 
   const fire = async (patch) => {
     if (busyRef.current) return
@@ -80,6 +97,27 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
 
   const sendTaunt = (emoji) => {
     fire({ taunt: { emoji, by: myRole, ts: Date.now() } })
+  }
+
+  const endTurn = () => {
+    if (relaxed && asyncSolvePhase) fire(passSolvePatch(room))
+  }
+
+  // One power-up per player per game, usable on your turn in the letter phase.
+  const [powerOpen, setPowerOpen] = useState(false)
+  // Firebase strips nulls, so "never used" can read as undefined.
+  const myPowerUnused = room.powerups?.[myRole] !== 'used'
+  const usePowerup = (id) => {
+    setPowerOpen(false)
+    if (!myTurn || !myPowerUnused) return
+    if (id === 'reveal') {
+      const patch = revealPowerupPatch(room, myRole)
+      if (patch) fire(patch)
+    } else if (id === 'time' && !relaxed) {
+      fire(timePowerupPatch(room, myRole))
+    } else if (id === 'double') {
+      fire(doublePowerupPatch(room, myRole))
+    }
   }
 
   // Achievement toast queue.
@@ -117,20 +155,71 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   // Give rooms created by an older app build a deadline as soon as the
   // current player opens them.
   useEffect(() => {
-    if (!myTurn || room.solveUntil || room.letterUntil || room.status !== 'playing') return
+    if (relaxed || !myTurn || room.solveUntil || room.letterUntil || room.status !== 'playing') return
     fire({ letterUntil: Date.now() + LETTER_WINDOW_MS })
-  }, [myTurn, room.solveUntil, room.letterUntil, room.status])
+  }, [myTurn, room.solveUntil, room.letterUntil, room.status, relaxed])
 
   useEffect(() => {
-    if (!myTurn || isPaused || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
+    if (relaxed || !myTurn || isPaused || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
     fire(letterWindowExpiredPatch(room))
-  }, [now, myTurn, isPaused, room.letterUntil, room.solveUntil, room.status])
+  }, [now, myTurn, isPaused, room.letterUntil, room.solveUntil, room.status, relaxed])
 
   useEffect(() => {
-    if (!myTurn || isPaused || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
+    if (relaxed || !myTurn || isPaused || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
     setSolving(null)
     fire(solveWindowExpiredPatch(room))
-  }, [now, myTurn, isPaused, room.solveUntil, room.status])
+  }, [now, myTurn, isPaused, room.solveUntil, room.status, relaxed])
+
+  // Relaxed pace: ask for notification permission once, then nudge whenever
+  // the turn lands on this player while the tab is hidden.
+  useEffect(() => {
+    if (relaxed && !hotseat) requestNotifyPermission()
+  }, [relaxed, hotseat])
+  useEffect(() => {
+    if (!relaxed || hotseat || !myTurn) return
+    const m = room.lastMove
+    const what = m?.type === 'letter'
+      ? `${them.name} called "${m.letter?.toUpperCase()}"`
+      : m?.type === 'solve'
+        ? `${them.name} tried a solve`
+        : `${them.name} moved`
+    notifyTurn('WordStrike — your turn!', `${what}. Come take your shot.`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myTurn, relaxed, hotseat])
+
+  // Presence heartbeat (online games): stamp "seen" every 20s so the rival's
+  // device can show offline / reconnected banners.
+  useEffect(() => {
+    if (hotseat || bot || room.status !== 'playing') return
+    const beat = () => store.update(room.code, { [`seen/${role}`]: Date.now() }).catch(() => {})
+    beat()
+    const interval = setInterval(beat, 20_000)
+    return () => clearInterval(interval)
+  }, [hotseat, room.status, room.code, role, store])
+
+  const [rivalOffline, setRivalOffline] = useState(false)
+  useEffect(() => {
+    if (hotseat || relaxed || room.status !== 'playing') return
+    const check = () => {
+      const seen = room.seen?.[rival]
+      setRivalOffline(!!seen && Date.now() - seen > 50_000)
+    }
+    check()
+    const interval = setInterval(check, 5_000)
+    return () => clearInterval(interval)
+  }, [hotseat, relaxed, room.status, room.seen, rival])
+  const wasOfflineRef = useRef(false)
+  const [reconnected, setReconnected] = useState(false)
+  useEffect(() => {
+    if (rivalOffline) {
+      wasOfflineRef.current = true
+    } else if (wasOfflineRef.current) {
+      wasOfflineRef.current = false
+      setReconnected(true)
+      const t = setTimeout(() => setReconnected(false), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [rivalOffline])
 
   // Hotseat handoff: once the turn flips away from the player holding the
   // phone, give them a moment to watch the reveal, then drop the curtain.
@@ -146,7 +235,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   useEffect(() => {
     if (hotseat || room.status !== 'finished') return
     if (room.rematch?.host && room.rematch?.guest) {
-      fire(rematchResetPatch())
+      fire(rematchResetPatch(room))
     }
   }, [room, hotseat])
 
@@ -201,17 +290,24 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     const m = room.lastMove
     if (!m || m.ts === seenMoveRef.current) return
     seenMoveRef.current = m.ts
-    if (m.type === 'letter') {
-      setStreaks((s) => ({ ...s, [m.by]: m.correct ? s[m.by] + 1 : 0 }))
+    if (m.type === 'letter' || (m.type === 'powerup' && m.powerup === 'reveal')) {
+      if (m.type === 'letter') setStreaks((s) => ({ ...s, [m.by]: m.correct ? s[m.by] + 1 : 0 }))
       setReaction({ role: m.by, kind: m.correct ? 'bounce' : 'droop', ts: m.ts })
-      if (m.correct) playHits(m.hits)
-      else playMiss()
+      if (m.correct) {
+        playHits(m.hits || 1)
+        hapticHit()
+      } else {
+        playMiss()
+        hapticMiss()
+      }
     } else if (m.type === 'solve') {
       setReaction({ role: m.by, kind: m.correct ? 'spin' : 'droop', ts: m.ts })
       if (m.correct) {
         playSolve()
+        hapticSolve()
       } else {
         playWrongSolve()
+        hapticWrong()
         setShake(true)
         setTimeout(() => setShake(false), 550)
       }
@@ -235,16 +331,39 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   useEffect(() => {
     if (room.status !== 'finished' || !room.winner) return
     playWin()
+    hapticWin()
     const iWon = hotseat || room.winner === role
     if (iWon) {
       unlock('first_blood')
+      const n = wordCountOf(room)
       const w = solvedCount(room, room.winner)
       const l = solvedCount(room, otherRole(room.winner))
-      if (w === 5 && l === 4) unlock('photo_finish')
-      if (w === 5 && l === 0) unlock('clean_sweep')
+      if (w === n && l === n - 1) unlock('photo_finish')
+      if (w === n && l === 0) unlock('clean_sweep')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.status, room.winner])
+
+  // Practice bot: this device plays the guest seat after a thinking pause.
+  useEffect(() => {
+    if (!bot || room.status !== 'playing' || room.turn !== 'guest') return
+    const t = setTimeout(() => {
+      fire(botMovePatch(room, bot))
+    }, 1200 + Math.random() * 1300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bot, room])
+  // Bot always accepts a rematch and re-picks its secret words.
+  useEffect(() => {
+    if (!bot) return
+    if (room.status === 'finished' && room.rematch?.host && !room.rematch?.guest) {
+      fire({ 'rematch/guest': true })
+    }
+    if (room.status === 'lobby' && !room.players.guest?.words) {
+      fire({ 'players/guest/words': botWords(wordCountOf(room)), 'players/guest/ready': true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bot, room])
 
   // Fireworks celebrate every correct solve; keyed by the move timestamp so
   // each solve gets a fresh burst.
@@ -263,7 +382,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   return (
     <div className={`screen game ${shake ? 'shake' : ''}`}>
       <header className="game-header">
-        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} reaction={reaction?.role === myRole ? reaction : null} />
+        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} total={wordCountOf(room)} reaction={reaction?.role === myRole ? reaction : null} />
         <div className="turn-pill-wrap">
           {room.status === 'playing' && (
             <span className={`turn-pill ${myTurn ? 'mine' : ''}`}>
@@ -271,7 +390,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
             </span>
           )}
         </div>
-        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} reaction={reaction?.role === rival ? reaction : null} right />
+        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} total={wordCountOf(room)} reaction={reaction?.role === rival ? reaction : null} right />
       </header>
 
       <MoveBanner room={room} role={myRole} streaks={streaks} />
@@ -310,16 +429,22 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           <p className="kb-hint">
             {myTurn
               ? solveWindowOpen
-                ? `Solve a word now — ${solveSeconds} second${solveSeconds === 1 ? '' : 's'} left`
-                : `Pick a letter — ${letterSeconds} second${letterSeconds === 1 ? '' : 's'} left`
+                ? relaxed
+                  ? 'Solve a word, call it good, or end your turn'
+                  : `Solve a word now — ${solveSeconds} second${solveSeconds === 1 ? '' : 's'} left`
+                : relaxed
+                  ? 'Your turn — pick a letter whenever you like'
+                  : `Pick a letter — ${letterSeconds} second${letterSeconds === 1 ? '' : 's'} left`
               : hotseat
                 ? `Nice — hand the phone to ${them.name} when you're ready`
-                : 'Waiting for your rival…'}
+                : relaxed
+                  ? `Waiting for ${them.name} — you'll get a nudge when it's your turn`
+                  : 'Waiting for your rival…'}
           </p>
-          {solveWindowOpen && (
+          {solveWindowOpen && !relaxed && (
             <div className="solve-actions">
               <div className="solve-countdown" role="timer" aria-live="polite">
-                <span style={{ '--timer-progress': `${((room.solveUntil - now) / 10_000) * 100}%` }} />
+                <span style={{ '--timer-progress': `${((room.solveUntil - now) / windows(room).solve) * 100}%` }} />
                 <strong>{solveSeconds}</strong>
               </div>
               <button
@@ -331,10 +456,31 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
               </button>
             </div>
           )}
-          {letterWindowOpen && (
+          {solveWindowOpen && relaxed && (
+            <button className="btn ghost pass-btn" type="button" onClick={endTurn}>
+              End my turn ➜
+            </button>
+          )}
+          {letterWindowOpen && !relaxed && (
             <div className="letter-countdown" role="timer" aria-live="polite">
-              <span style={{ '--timer-progress': `${((room.letterUntil - now) / LETTER_WINDOW_MS) * 100}%` }} />
+              <span style={{ '--timer-progress': `${((room.letterUntil - now) / windows(room).letter) * 100}%` }} />
               <strong>{letterSeconds}</strong>
+            </div>
+          )}
+          {myTurn && myPowerUnused && (
+            <div className="powerup-wrap">
+              <button className="btn ghost powerup-btn" type="button" onClick={() => setPowerOpen((o) => !o)}>
+                🎁 Power-up
+              </button>
+              {powerOpen && (
+                <div className="powerup-pop">
+                  {POWERUPS.filter((p) => !(relaxed && p.id === 'time')).map((p) => (
+                    <button key={p.id} className="menu-item" type="button" onClick={() => usePowerup(p.id)}>
+                      {p.emoji} <strong>{p.name}</strong> — {p.desc}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <Keyboard guessed={guessedBy(room, myRole)} disabled={!letterWindowOpen} onKey={callLetter} />
@@ -344,7 +490,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
         <p className="kb-hint">Letters your rival has uncovered. Solved words show gold.</p>
       )}
 
-      {room.status === 'playing' && !hotseat && (
+      {room.status === 'playing' && !hotseat && !bot && (
         <div className="taunt-bar" aria-label="Send a reaction">
           {TAUNTS.map((e) => (
             <button key={e} className="taunt-btn" type="button" onClick={() => sendTaunt(e)}>{e}</button>
@@ -352,8 +498,15 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
         </div>
       )}
 
+      {rivalOffline && (
+        <p className="offline-banner">📡 {them.name} seems to be offline — hang tight…</p>
+      )}
+      {reconnected && (
+        <p className="offline-banner back">✅ {them.name} reconnected!</p>
+      )}
+
       <div className="row game-footer">
-        {myTurn && (
+        {myTurn && !relaxed && (
           <button className="btn ghost leave" onClick={pauseGame}>⏸ Pause</button>
         )}
         <button className="btn ghost leave" onClick={onLeave}>Leave</button>
@@ -408,7 +561,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           role={myRole}
           hotseat={hotseat}
           onLeave={onLeave}
-          onRematch={() => fire(hotseat ? rematchResetPatch() : { [`rematch/${myRole}`]: true })}
+          onRematch={() => fire(hotseat ? rematchResetPatch(room) : { [`rematch/${myRole}`]: true })}
           opponentLeft={opponentLeft}
         />
       )}
@@ -439,13 +592,13 @@ function PauseCountdown({ until, now }) {
   )
 }
 
-function PlayerBadge({ player, label, active, score, right, reaction }) {
+function PlayerBadge({ player, label, active, score, total = 5, right, reaction }) {
   return (
     <div className={`player-badge ${active ? 'active' : ''} ${right ? 'right' : ''}`}>
       <span key={reaction?.ts || 'still'} className={`badge-avatar ${reaction ? `react-${reaction.kind}` : ''}`}>{player.avatar}</span>
       <span className="badge-text">
         <span className="badge-name">{player.name}</span>
-        <span className="badge-score">{score}/5 solved</span>
+        <span className="badge-score">{score}/{total} solved</span>
       </span>
     </div>
   )
@@ -467,6 +620,12 @@ function MoveBanner({ room, role, streaks }) {
   } else {
     if (m.type === 'pass') {
       text = `${actor} passed on solving 👋`
+    } else if (m.type === 'powerup') {
+      text = m.powerup === 'reveal'
+        ? `${actor} used 🔍 X-Ray — "${m.letter?.toUpperCase()}" revealed!`
+        : m.powerup === 'time'
+          ? `${actor} used ⏳ Extra Time!`
+          : `${actor} used ⚡ Double Strike — two letters this turn!`
     } else if (m.type === 'timeout') {
       text = m.phase === 'letter'
         ? `${actor} ran out of time to pick a letter ⏱️`
@@ -628,7 +787,7 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
             <span className="end-emoji">🏆</span>
             <h2>{winner.avatar} {winner.name} wins!</h2>
             <p className="end-title">{pickTitle(WIN_TITLES, room)}</p>
-            <p className="hint">All five of {room.players[loserRole].name}'s words — cracked.</p>
+            <p className="hint">All {wordCountOf(room)} of {room.players[loserRole].name}'s words — cracked.</p>
             <FinalWords label={`${room.players[loserRole].name}'s words were:`} words={room.players[loserRole].words} />
           </>
         ) : (
@@ -637,7 +796,7 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
             <h2>{won ? 'Victory!' : 'Defeated'}</h2>
             <p className="end-title">{won ? pickTitle(WIN_TITLES, room) : pickTitle(LOSE_TITLES, room)}</p>
             <p className="hint">
-              {won ? 'You cracked all five words.' : `${room.players[rival].name} cracked your board first.`}
+              {won ? `You cracked all ${wordCountOf(room)} words.` : `${room.players[rival].name} cracked your board first.`}
             </p>
             <FinalWords label={`${room.players[rival].name}'s words were:`} words={room.players[rival].words} />
           </>
@@ -656,18 +815,55 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
 }
 
 // The losing side's words flip in one at a time, wheel-of-fortune style.
+// Tap a word to look up what it means.
 function FinalWords({ label, words }) {
+  const [defWord, setDefWord] = useState(null)
   return (
     <div className="final-words">
-      <span className="final-label">{label}</span>
+      <span className="final-label">{label} <em className="def-hint">(tap a word for its meaning)</em></span>
       <div className="final-list">
         {(words || []).map((w, wi) => (
-          <span key={w} className="final-word">
+          <button key={w} type="button" className="final-word" onClick={() => setDefWord(w)}>
             {[...w].map((ch, li) => (
               <span key={li} className="tile revealed fresh gold" style={{ '--d': `${wi * 0.5 + li * 0.09}s` }}>{ch}</span>
             ))}
-          </span>
+          </button>
         ))}
+      </div>
+      {defWord && <DefinitionSheet word={defWord} onClose={() => setDefWord(null)} />}
+    </div>
+  )
+}
+
+function DefinitionSheet({ word, onClose }) {
+  const [state, setState] = useState({ loading: true })
+  useEffect(() => {
+    let stopped = false
+    fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        if (stopped) return
+        const meanings = (data[0]?.meanings || []).slice(0, 2).map((m) => ({
+          pos: m.partOfSpeech,
+          def: m.definitions?.[0]?.definition
+        })).filter((m) => m.def)
+        setState({ meanings })
+      })
+      .catch(() => { if (!stopped) setState({ error: true }) })
+    return () => { stopped = true }
+  }, [word])
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true" onClick={(e) => { e.stopPropagation(); onClose() }}>
+      <div className="modal-card def-card" onClick={(e) => e.stopPropagation()}>
+        <h2>{word.toUpperCase()}</h2>
+        {state.loading && <div className="spinner" />}
+        {state.error && <p className="hint">Couldn't fetch the definition — maybe you're offline.</p>}
+        {state.meanings?.map((m, i) => (
+          <p key={i} className="def-line"><em>{m.pos}</em> — {m.def}</p>
+        ))}
+        {state.meanings?.length === 0 && <p className="hint">No definition found, but it's in our dictionary — promise!</p>}
+        <button className="btn ghost" type="button" onClick={onClose}>Close</button>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getStore, getStoreFor, isLocalMode } from './net/store.js'
-import { makeRoomCode, newRoom, startPlayingPatch } from './game.js'
+import { makeRoomCode, newRoom, startPlayingPatch, wordCountOf } from './game.js'
 import Home from './screens/Home.jsx'
 import Profile from './screens/Profile.jsx'
 import Words from './screens/Words.jsx'
@@ -8,6 +8,8 @@ import Lobby from './screens/Lobby.jsx'
 import Game from './screens/Game.jsx'
 import Curtain from './screens/Curtain.jsx'
 import ThemePicker from './screens/ThemePicker.jsx'
+import Setup from './screens/Setup.jsx'
+import { BOT_LEVELS, botWords } from './bot.js'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
 import { applyTheme } from './themes.js'
 
@@ -79,7 +81,7 @@ export default function App() {
     if (host?.ready && guest?.ready && !startingRef.current) {
       startingRef.current = true
       getStoreFor(session).then((store) =>
-        store.update(session.code, startPlayingPatch())
+        store.update(session.code, startPlayingPatch(room))
       )
     }
   }, [room, session])
@@ -99,7 +101,7 @@ export default function App() {
   const leaveRoom = useCallback(async () => {
     if (session && room) {
       const store = await getStoreFor(session)
-      if (session.hotseat) {
+      if (session.hotseat || session.bot) {
         store.deleteRoom(session.code)
       } else if (room.status !== 'finished') {
         store.update(session.code, { [`left/${session.role}`]: true })
@@ -114,6 +116,18 @@ export default function App() {
   // ── Pre-room flow ─────────────────────────────────────────────
   const startCreate = () => setFlow({ mode: 'create', step: 'profile' })
   const startHotseat = () => setFlow({ mode: 'hotseat', step: 'profile1' })
+  const startPractice = () => setFlow({ mode: 'practice', step: 'profile' })
+
+  const onPracticeStart = async (level) => {
+    const code = makeRoomCode()
+    const bot = BOT_LEVELS[level]
+    const r = newRoom(code, { name: profile.name, avatar: profile.avatar }, null, { pace: 'async' })
+    r.players.host.ready = false
+    r.players.guest = { name: bot.name, avatar: bot.avatar, words: botWords(5), ready: true }
+    const s = await getStoreFor({ bot: level })
+    await s.createRoom(code, r)
+    enterSession(code, 'host', { bot: level })
+  }
 
   const startJoin = async (code) => {
     setError(null)
@@ -147,6 +161,10 @@ export default function App() {
       return
     }
     saveProfile(p)
+    if (flow.mode === 'practice') {
+      setFlow({ ...flow, step: 'difficulty' })
+      return
+    }
     if (flow.mode === 'create') {
       // Theme comes next; the room is created after that.
       setFlow({ ...flow, step: 'theme', p1: p })
@@ -167,11 +185,15 @@ export default function App() {
     }
   }
 
-  const onThemeDone = async (themeId) => {
+  const onThemeDone = (themeId) => {
+    setFlow({ ...flow, step: 'setup', theme: themeId })
+  }
+
+  const onSetupDone = async (opts) => {
     if (flow.mode === 'hotseat') {
       const code = makeRoomCode()
-      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null)
-      r.theme = themeId
+      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null, { ...opts, pace: 'live' })
+      r.theme = flow.theme
       r.players.host.ready = false
       r.players.guest = { name: flow.p2.name, avatar: flow.p2.avatar, words: null, ready: false }
       const s = await getStoreFor({ hotseat: true })
@@ -181,8 +203,8 @@ export default function App() {
       // Online create: room exists now; words come after the guest joins.
       const code = makeRoomCode()
       const store = await getStore()
-      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null)
-      r.theme = themeId
+      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null, opts)
+      r.theme = flow.theme
       await store.createRoom(code, r)
       enterSession(code, 'host')
     }
@@ -215,7 +237,8 @@ export default function App() {
               avatar={host.avatar}
               name={host.name}
               hint="Pick your 5 secret words — no peeking behind you!"
-              title={`${host.name}, pick your 5 words`}
+              title={`${host.name}, pick your ${wordCountOf(room)} words`}
+              count={wordCountOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -227,7 +250,8 @@ export default function App() {
               avatar={guest.avatar}
               name={guest.name}
               hint={`${host.name} has locked in. Your turn to pick — no peeking behind you!`}
-              title={`${guest.name}, pick your 5 words`}
+              title={`${guest.name}, pick your ${wordCountOf(room)} words`}
+              count={wordCountOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -244,12 +268,36 @@ export default function App() {
           // Host waiting for guest to arrive before picking words.
           screen = <Lobby room={room} role={session.role} onLeave={leaveRoom} />
         } else {
-          screen = <Words title="Pick your 5 words" onDone={onRoomWordsDone} onBack={leaveRoom} />
+          screen = <Words title={`Pick your ${wordCountOf(room)} words`} count={wordCountOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
         }
       }
     } else {
-      screen = <Game room={room} role={session.role} store={store} hotseat={!!session.hotseat} onLeave={leaveRoom} />
+      screen = <Game room={room} role={session.role} store={store} hotseat={!!session.hotseat} bot={session.bot || null} onLeave={leaveRoom} />
     }
+  } else if (flow?.step === 'difficulty') {
+    screen = (
+      <div className="screen setup-screen">
+        <h2>🤖 Pick your opponent</h2>
+        <p className="hint">Practice against the machine — perfect for learning the ropes.</p>
+        <div className="home-actions">
+          {Object.entries(BOT_LEVELS).map(([level, b]) => (
+            <button key={level} className="btn ghost big" onClick={() => onPracticeStart(level)}>
+              {b.avatar} {b.name}
+              <span className="btn-sub">{level === 'easy' ? 'takes it easy on you' : level === 'medium' ? 'puts up a fight' : 'shows no mercy'}</span>
+            </button>
+          ))}
+        </div>
+        <button className="btn ghost" onClick={() => setFlow(null)}>Back</button>
+      </div>
+    )
+  } else if (flow?.step === 'setup') {
+    screen = (
+      <Setup
+        allowAsync={flow.mode !== 'hotseat'}
+        onDone={onSetupDone}
+        onBack={() => setFlow({ ...flow, step: 'theme' })}
+      />
+    )
   } else if (flow?.step === 'theme') {
     screen = (
       <ThemePicker
@@ -264,7 +312,7 @@ export default function App() {
   } else if (flow?.step === 'profile2') {
     screen = <Profile key="p2" title="Player 2, who are you?" initial={null} onDone={onProfileDone} onBack={() => setFlow({ ...flow, step: 'profile1' })} />
   } else {
-    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} error={error} />
+    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} error={error} />
   }
 
   return (

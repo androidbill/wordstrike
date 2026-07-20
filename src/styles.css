@@ -244,6 +244,73 @@ h3 { margin: 0; }
 .history-detail { font-size: 0.85rem; color: var(--ink); }
 .history-meta { font-size: 0.72rem; color: var(--ink-dim); }
 
+/* ── Game setup / practice / tutorial ─────────────────────────── */
+.setup-screen { gap: 18px; }
+.setup-group { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 8px; }
+.setup-label { font-size: 0.8rem; font-weight: 700; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.setup-options { display: flex; gap: 10px; }
+.setup-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 10px;
+  border: 2px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.setup-card:hover { transform: translateY(-2px); }
+.setup-card.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.setup-card.slim { padding: 10px; }
+.setup-emoji { font-size: 1.4rem; }
+.setup-desc { font-size: 0.7rem; color: var(--ink-dim); text-align: center; }
+
+.tut-nudge { font-size: 0.85rem; }
+.tut-step { max-width: 420px; text-align: center; color: var(--ink); font-size: 0.95rem; min-height: 3em; }
+
+.powerup-wrap { position: relative; }
+.powerup-btn { padding: 7px 16px; font-size: 0.85rem; }
+.powerup-pop {
+  position: absolute;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, 88vw);
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: #171c36;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.48);
+  z-index: 40;
+  text-align: left;
+}
+.powerup-pop .menu-item { font-size: 0.8rem; white-space: normal; }
+
+.offline-banner {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+  text-align: center;
+}
+.offline-banner.back { color: var(--hit); }
+
+.final-word {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.def-hint { font-style: normal; font-size: 0.68rem; color: var(--ink-dim); }
+.def-card { max-width: 380px; }
+.def-line { font-size: 0.88rem; text-align: left; margin: 6px 0; }
+.def-line em { color: var(--gold); }
+
 /* ── Theme picker ─────────────────────────────────────────────── */
 .theme-screen { gap: 18px; }
 .theme-grid {

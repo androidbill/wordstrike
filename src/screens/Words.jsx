@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { isValidWord, searchWords, randomCommonWord } from '../words.js'
 
-export default function Words({ title, onDone, onBack }) {
-  const [words, setWords] = useState(['', '', '', '', ''])
-  const [valid, setValid] = useState([null, null, null, null, null]) // null=unknown
+export default function Words({ title, onDone, onBack, count = 5 }) {
+  const [words, setWords] = useState(() => Array.from({ length: count }, () => ''))
+  const [valid, setValid] = useState(() => Array.from({ length: count }, () => null)) // null=unknown
   const [browsing, setBrowsing] = useState(null) // slot index or null
   const [busy, setBusy] = useState(false)
 
@@ -22,12 +22,12 @@ export default function Words({ title, onDone, onBack }) {
   const roll = (i) => setWord(i, randomCommonWord(words))
   const rollAll = () => {
     const picked = []
-    for (let i = 0; i < 5; i++) picked.push(randomCommonWord(picked))
+    for (let i = 0; i < count; i++) picked.push(randomCommonWord(picked))
     setWords(picked)
-    setValid([true, true, true, true, true])
+    setValid(picked.map(() => true))
   }
 
-  const unique = new Set(words).size === 5
+  const unique = new Set(words).size === count
   const ready = valid.every((v) => v === true) && unique
 
   const submit = async () => {
