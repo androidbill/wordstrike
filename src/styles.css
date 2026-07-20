@@ -435,6 +435,38 @@ h3 { margin: 0; }
 .solve-tiles .tile { width: 52px; }
 .ghost-input { position: absolute; opacity: 0; pointer-events: none; }
 
+/* ── Pass & play curtain ───────────────────────────────────────── */
+.curtain {
+  position: fixed; inset: 0; z-index: 60;
+  background:
+    radial-gradient(900px 500px at 50% -10%, #1c2450 0%, transparent 60%),
+    var(--bg);
+  display: grid; place-items: center;
+  animation: fadeIn 0.25s ease;
+  padding: 24px;
+}
+.curtain-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  text-align: center; width: 100%; max-width: 320px;
+}
+.curtain-avatar {
+  font-size: 4rem;
+  width: 108px; height: 108px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 40px rgba(245, 197, 66, 0.25);
+  animation: cardPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.btn-sub {
+  display: block;
+  font-size: 0.72rem; font-weight: 500;
+  color: var(--ink-dim); letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
 /* ── End overlay ───────────────────────────────────────────────── */
 .end-overlay {
   position: fixed; inset: 0; z-index: 50;
