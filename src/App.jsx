@@ -7,7 +7,9 @@ import Words from './screens/Words.jsx'
 import Lobby from './screens/Lobby.jsx'
 import Game from './screens/Game.jsx'
 import Curtain from './screens/Curtain.jsx'
+import ThemePicker from './screens/ThemePicker.jsx'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
+import { applyTheme } from './themes.js'
 
 const PROFILE_KEY = 'ws-profile'
 const SESSION_KEY = 'ws-session'
@@ -59,6 +61,12 @@ export default function App() {
       unsub()
     }
   }, [session])
+
+  // Recolor the app to the room's theme; restore defaults outside a room.
+  useEffect(() => {
+    if (room) applyTheme(room.theme)
+    else if (!flow) applyTheme(null)
+  }, [room, flow])
 
   // Host is the referee: flips the room to 'playing' once both players are ready.
   useEffect(() => {
@@ -133,24 +141,15 @@ export default function App() {
         saveProfile(p) // player 1 is the device owner
         setFlow({ ...flow, step: 'profile2', p1: p })
       } else {
-        // Both players known — create a local room; words come next.
-        const code = makeRoomCode()
-        const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null)
-        r.players.host.ready = false
-        r.players.guest = { name: p.name, avatar: p.avatar, words: null, ready: false }
-        const s = await getStoreFor({ hotseat: true })
-        await s.createRoom(code, r)
-        enterSession(code, 'host', { hotseat: true })
+        // Both players known — the host picks the room's theme next.
+        setFlow({ ...flow, step: 'theme', p2: p })
       }
       return
     }
     saveProfile(p)
     if (flow.mode === 'create') {
-      // Create the room now; words are picked after the guest joins.
-      const code = makeRoomCode()
-      const store = await getStore()
-      await store.createRoom(code, newRoom(code, { name: p.name, avatar: p.avatar }, null))
-      enterSession(code, 'host')
+      // Theme comes next; the room is created after that.
+      setFlow({ ...flow, step: 'theme', p1: p })
       return
     } else {
       // Claim the guest seat now so the room reads as full.
@@ -165,6 +164,27 @@ export default function App() {
         'players/guest': { name: p.name, avatar: p.avatar, words: null, ready: false }
       })
       enterSession(flow.code, 'guest')
+    }
+  }
+
+  const onThemeDone = async (themeId) => {
+    if (flow.mode === 'hotseat') {
+      const code = makeRoomCode()
+      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null)
+      r.theme = themeId
+      r.players.host.ready = false
+      r.players.guest = { name: flow.p2.name, avatar: flow.p2.avatar, words: null, ready: false }
+      const s = await getStoreFor({ hotseat: true })
+      await s.createRoom(code, r)
+      enterSession(code, 'host', { hotseat: true })
+    } else {
+      // Online create: room exists now; words come after the guest joins.
+      const code = makeRoomCode()
+      const store = await getStore()
+      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null)
+      r.theme = themeId
+      await store.createRoom(code, r)
+      enterSession(code, 'host')
     }
   }
 
@@ -230,6 +250,13 @@ export default function App() {
     } else {
       screen = <Game room={room} role={session.role} store={store} hotseat={!!session.hotseat} onLeave={leaveRoom} />
     }
+  } else if (flow?.step === 'theme') {
+    screen = (
+      <ThemePicker
+        onDone={onThemeDone}
+        onBack={() => setFlow({ ...flow, step: flow.mode === 'hotseat' ? 'profile2' : 'profile' })}
+      />
+    )
   } else if (flow?.step === 'profile') {
     screen = <Profile initial={profile} onDone={onProfileDone} onBack={() => setFlow(null)} />
   } else if (flow?.step === 'profile1') {
