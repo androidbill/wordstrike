@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  LETTER_WINDOW_MS, SOLVE_WINDOW_MS, letterMovePatch, solveMovePatch,
+  LETTER_WINDOW_MS, letterMovePatch, solveMovePatch,
   letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
   rematchResetPatch
 } from '../game.js'
@@ -94,17 +94,17 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     }
   }, [room, hotseat])
 
-  // Track the fastest correct solve of this game. The previous room state
-  // holds the solveUntil deadline the solve raced against.
-  const prevRoomRef = useRef(room)
+  // Track the fastest solve of this game: elapsed time from the moment the
+  // game started to the moment the word was solved.
+  const prevMoveRef = useRef(room.lastMove)
   const fastestRef = useRef(null)
   useEffect(() => {
-    const prev = prevRoomRef.current
-    prevRoomRef.current = room
+    const prevMove = prevMoveRef.current
+    prevMoveRef.current = room.lastMove
     const m = room.lastMove
-    if (!m || m === prev.lastMove || m.type !== 'solve' || !m.correct) return
-    if (!prev.solveUntil) return
-    const ms = m.ts - (prev.solveUntil - SOLVE_WINDOW_MS)
+    if (!m || m === prevMove || m.type !== 'solve' || !m.correct) return
+    if (!room.startedAt) return
+    const ms = m.ts - room.startedAt
     if (ms >= 0 && (!fastestRef.current || ms < fastestRef.current.ms)) {
       fastestRef.current = { name: room.players[m.by].name, ms }
     }

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { APP_VERSION } from '../version.js'
 import { hardRefresh } from '../appUpdates.js'
 import QRModal from './QRModal.jsx'
-import { loadHistory, historyStats, formatDuration } from '../history.js'
+import { loadHistory, historyStats, formatDuration, formatSolveTime } from '../history.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
@@ -172,7 +172,7 @@ function HistoryModal({ onClose }) {
               )}
               {stats.fastestSolve && (
                 <div className="stat">
-                  <span className="stat-value">{(stats.fastestSolve.ms / 1000).toFixed(1)}s</span>
+                  <span className="stat-value">{formatSolveTime(stats.fastestSolve.ms)}</span>
                   <span className="stat-label">fastest solve · {stats.fastestSolve.name}</span>
                 </div>
               )}
@@ -186,7 +186,7 @@ function HistoryModal({ onClose }) {
                   </span>
                   <span className="history-meta">
                     {new Date(g.ts).toLocaleDateString()} · {formatDuration(g.durationMs)}
-                    {g.fastestSolve ? ` · ⚡${(g.fastestSolve.ms / 1000).toFixed(1)}s` : ''}
+                    {g.fastestSolve ? ` · ⚡${formatSolveTime(g.fastestSolve.ms)}` : ''}
                     {g.mode === 'hotseat' ? ' · 🤝' : ''}
                   </span>
                 </div>

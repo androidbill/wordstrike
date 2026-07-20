@@ -39,6 +39,12 @@ export function historyStats(history) {
   }
 }
 
+// Solve speed: sub-minute shows tenths, longer falls back to m/s.
+export function formatSolveTime(ms) {
+  if (ms == null) return '—'
+  return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : formatDuration(ms)
+}
+
 export function formatDuration(ms) {
   if (ms == null) return '—'
   const s = Math.round(ms / 1000)
