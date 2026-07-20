@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  letterMovePatch, solveMovePatch, solveWindowExpiredPatch, rematchResetPatch
+  LETTER_WINDOW_MS, letterMovePatch, solveMovePatch, letterWindowExpiredPatch,
+  solveWindowExpiredPatch, rematchResetPatch
 } from '../game.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
@@ -23,6 +24,8 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const busyRef = useRef(false)
   const solveWindowOpen = myTurn && room.solveUntil > now
   const solveSeconds = solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
+  const letterWindowOpen = myTurn && !room.solveUntil && room.letterUntil > now
+  const letterSeconds = letterWindowOpen ? Math.max(1, Math.ceil((room.letterUntil - now) / 1000)) : 0
 
   const fire = async (patch) => {
     if (busyRef.current) return
@@ -32,7 +35,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   }
 
   const callLetter = (letter) => {
-    if (!myTurn || solveWindowOpen || guessedBy(room, myRole)[letter]) return
+    if (!letterWindowOpen || guessedBy(room, myRole)[letter]) return
     fire(letterMovePatch(room, myRole, letter))
   }
 
@@ -43,12 +46,24 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   }
 
   useEffect(() => {
-    if (!room.solveUntil || room.status !== 'playing') return
+    if ((!room.solveUntil && !room.letterUntil) || room.status !== 'playing') return
     const tick = () => setNow(Date.now())
     tick()
     const interval = setInterval(tick, 200)
     return () => clearInterval(interval)
-  }, [room.solveUntil, room.status])
+  }, [room.solveUntil, room.letterUntil, room.status])
+
+  // Give rooms created by an older app build a deadline as soon as the
+  // current player opens them.
+  useEffect(() => {
+    if (!myTurn || room.solveUntil || room.letterUntil || room.status !== 'playing') return
+    fire({ letterUntil: Date.now() + LETTER_WINDOW_MS })
+  }, [myTurn, room.solveUntil, room.letterUntil, room.status])
+
+  useEffect(() => {
+    if (!myTurn || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
+    fire(letterWindowExpiredPatch(room))
+  }, [now, myTurn, room.letterUntil, room.solveUntil, room.status])
 
   useEffect(() => {
     if (!myTurn || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
@@ -125,7 +140,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
             {myTurn
               ? solveWindowOpen
                 ? `Solve a word now — ${solveSeconds} second${solveSeconds === 1 ? '' : 's'} left`
-                : 'Call a letter to start your 10-second solve window'
+                : `Pick a letter — ${letterSeconds} second${letterSeconds === 1 ? '' : 's'} left`
               : hotseat
                 ? `Nice — hand the phone to ${them.name} when you're ready`
                 : 'Waiting for your rival…'}
@@ -136,7 +151,13 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
               <strong>{solveSeconds}</strong>
             </div>
           )}
-          <Keyboard guessed={guessedBy(room, myRole)} disabled={!myTurn || solveWindowOpen} onKey={callLetter} />
+          {letterWindowOpen && (
+            <div className="letter-countdown" role="timer" aria-live="polite">
+              <span style={{ '--timer-progress': `${((room.letterUntil - now) / 30_000) * 100}%` }} />
+              <strong>{letterSeconds}</strong>
+            </div>
+          )}
+          <Keyboard guessed={guessedBy(room, myRole)} disabled={!letterWindowOpen} onKey={callLetter} />
         </>
       )}
       {view === 'defend' && !hotseat && room.status === 'playing' && (
@@ -204,7 +225,9 @@ function MoveBanner({ room, role }) {
       : `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
   } else {
     if (m.type === 'timeout') {
-      text = `${actor}'s solve time ran out ⏱️`
+      text = m.phase === 'letter'
+        ? `${actor} ran out of time to pick a letter ⏱️`
+        : `${actor}'s solve time ran out ⏱️`
     } else {
       text = m.correct
         ? `${actor} solved word #${m.wordIndex + 1}! ⚡`

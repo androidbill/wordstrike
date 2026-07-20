@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getStore, getStoreFor, isLocalMode } from './net/store.js'
-import { makeRoomCode, newRoom } from './game.js'
+import { makeRoomCode, newRoom, startPlayingPatch } from './game.js'
 import Home from './screens/Home.jsx'
 import Profile from './screens/Profile.jsx'
 import Words from './screens/Words.jsx'
@@ -71,11 +71,7 @@ export default function App() {
     if (host?.ready && guest?.ready && !startingRef.current) {
       startingRef.current = true
       getStoreFor(session).then((store) =>
-        store.update(session.code, {
-          status: 'playing',
-          turn: Math.random() < 0.5 ? 'host' : 'guest',
-          lastMove: null
-        })
+        store.update(session.code, startPlayingPatch())
       )
     }
   }, [room, session])

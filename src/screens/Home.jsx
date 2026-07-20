@@ -101,7 +101,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
         <ul>
           <li>Each player secretly picks five 5-letter words.</li>
           <li>Take turns calling a letter — it lights up everywhere it appears in your rival's five words.</li>
-          <li>After calling a letter, you have 10 seconds to solve a word. A correct solve restarts the timer; a miss or timeout ends your turn.</li>
+          <li>You have 30 seconds to call a letter, then 10 seconds to solve a word. A correct solve restarts the solve timer; a miss or timeout ends your turn.</li>
           <li>First to crack all five of their rival's words wins.</li>
           <li>No internet? Pass &amp; Play shares one device — a curtain screen keeps words secret between turns.</li>
         </ul>

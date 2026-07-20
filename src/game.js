@@ -13,6 +13,7 @@
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 export const SOLVE_WINDOW_MS = 10_000
+export const LETTER_WINDOW_MS = 30_000
 
 export function makeRoomCode() {
   let code = ''
@@ -37,9 +38,21 @@ export function newRoom(code, hostProfile, hostWords) {
     guessed: { host: {}, guest: {} },
     solved: { host: [false, false, false, false, false], guest: [false, false, false, false, false] },
     lastMove: null,
+    letterUntil: null,
     solveUntil: null,
     winner: null,
     left: {}
+  }
+}
+
+export function startPlayingPatch() {
+  const turn = Math.random() < 0.5 ? 'host' : 'guest'
+  return {
+    status: 'playing',
+    turn,
+    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    solveUntil: null,
+    lastMove: null
   }
 }
 
@@ -83,6 +96,7 @@ export function letterMovePatch(room, role, letter) {
     [`guessed/${role}`]: nextGuessed,
     [`solved/${role}`]: nextSolved,
     turn: role,
+    letterUntil: null,
     solveUntil: won ? null : Date.now() + SOLVE_WINDOW_MS,
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
@@ -100,6 +114,7 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
   return {
     [`solved/${role}`]: nextSolved,
     turn: correct ? role : otherRole(role),
+    letterUntil: correct || won ? null : Date.now() + LETTER_WINDOW_MS,
     solveUntil: correct && !won ? Date.now() + SOLVE_WINDOW_MS : null,
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
@@ -110,10 +125,27 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
 export function solveWindowExpiredPatch(room) {
   return {
     turn: otherRole(room.turn),
+    letterUntil: Date.now() + LETTER_WINDOW_MS,
     solveUntil: null,
     lastMove: {
       by: room.turn,
       type: 'timeout',
+      phase: 'solve',
+      correct: false,
+      ts: Date.now()
+    }
+  }
+}
+
+export function letterWindowExpiredPatch(room) {
+  return {
+    turn: otherRole(room.turn),
+    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    solveUntil: null,
+    lastMove: {
+      by: room.turn,
+      type: 'timeout',
+      phase: 'letter',
       correct: false,
       ts: Date.now()
     }
@@ -135,6 +167,7 @@ export function rematchResetPatch() {
     guessed: null,
     solved: null,
     lastMove: null,
+    letterUntil: null,
     solveUntil: null,
     winner: null,
     rematch: null,
