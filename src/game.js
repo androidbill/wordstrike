@@ -1,0 +1,107 @@
+// Pure game logic: room state shape, moves, and derived helpers.
+// Room document:
+// {
+//   code, createdAt, status: 'lobby' | 'playing' | 'finished',
+//   players: { host: {name, avatar, words: [5]|null, ready}, guest: {...}|null },
+//   turn: 'host' | 'guest',
+//   guessed: { host: {a:'hit'|'miss', ...}, guest: {...} },   // letters fired BY that role
+//   solved:  { host: [bool x5], guest: [bool x5] },           // opponent words solved BY that role
+//   lastMove: { by, type:'letter'|'solve', letter?, wordIndex?, correct, hits?, ts },
+//   winner: 'host' | 'guest' | null,
+//   left: { host?: true, guest?: true }
+// }
+
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+export function makeRoomCode() {
+  let code = ''
+  for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
+  return code
+}
+
+export function otherRole(role) {
+  return role === 'host' ? 'guest' : 'host'
+}
+
+export function newRoom(code, hostProfile, hostWords) {
+  return {
+    code,
+    createdAt: Date.now(),
+    status: 'lobby',
+    players: {
+      host: { ...hostProfile, words: hostWords, ready: true },
+      guest: null
+    },
+    turn: 'host',
+    guessed: { host: {}, guest: {} },
+    solved: { host: [false, false, false, false, false], guest: [false, false, false, false, false] },
+    lastMove: null,
+    winner: null,
+    left: {}
+  }
+}
+
+// Words a role is attacking (the opponent's words).
+export function targetWords(room, role) {
+  return room.players[otherRole(role)]?.words || []
+}
+
+export function guessedBy(room, role) {
+  return room.guessed?.[role] || {}
+}
+
+export function solvedBy(room, role) {
+  // Default to five unsolved slots — Firebase strips empty/false-y branches,
+  // and an empty array would read as "all solved".
+  const s = room.solved?.[role]
+  return s && s.length === 5 ? s : [false, false, false, false, false]
+}
+
+// A letter is visible in a target word if the attacker guessed it or solved that word.
+export function isRevealed(room, role, wordIndex, letter) {
+  return !!guessedBy(room, role)[letter] || !!solvedBy(room, role)[wordIndex]
+}
+
+function isWordFullyRevealed(word, guessedLetters) {
+  return [...word].every((ch) => guessedLetters[ch])
+}
+
+// Build the DB patch for guessing a letter. Turn passes either way.
+// Words that become fully revealed by this letter count as solved.
+export function letterMovePatch(room, role, letter) {
+  const words = targetWords(room, role)
+  const hits = words.reduce((n, w) => n + [...w].filter((ch) => ch === letter).length, 0)
+  const nextGuessed = { ...guessedBy(room, role), [letter]: hits > 0 ? 'hit' : 'miss' }
+  const nextSolved = solvedBy(room, role).map(
+    (s, i) => s || isWordFullyRevealed(words[i], nextGuessed)
+  )
+  const won = nextSolved.every(Boolean)
+  return {
+    [`guessed/${role}`]: nextGuessed,
+    [`solved/${role}`]: nextSolved,
+    turn: won ? role : otherRole(role),
+    status: won ? 'finished' : 'playing',
+    winner: won ? role : null,
+    lastMove: { by: role, type: 'letter', letter, correct: hits > 0, hits, ts: Date.now() }
+  }
+}
+
+// Build the DB patch for a solve attempt. Correct: word revealed, keep the
+// turn. Wrong: turn passes.
+export function solveMovePatch(room, role, wordIndex, attempt) {
+  const words = targetWords(room, role)
+  const correct = attempt.toLowerCase() === words[wordIndex]
+  const nextSolved = solvedBy(room, role).map((s, i) => (i === wordIndex ? s || correct : s))
+  const won = nextSolved.every(Boolean)
+  return {
+    [`solved/${role}`]: nextSolved,
+    turn: correct ? role : otherRole(role),
+    status: won ? 'finished' : 'playing',
+    winner: won ? role : null,
+    lastMove: { by: role, type: 'solve', wordIndex, correct, ts: Date.now() }
+  }
+}
+
+export function solvedCount(room, role) {
+  return solvedBy(room, role).filter(Boolean).length
+}
