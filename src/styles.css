@@ -748,6 +748,24 @@ h3 { margin: 0; }
 .final-label { color: var(--ink-dim); font-size: 0.8rem; }
 .final-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
+/* ── Fireworks on a correct solve ─────────────────────────────── */
+.fireworks { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 45; }
+.burst { position: absolute; width: 0; height: 0; }
+.burst i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--burst-color);
+  opacity: 0;
+  animation: fw-particle 0.9s ease-out var(--burst-delay) forwards;
+}
+@keyframes fw-particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.25); opacity: 0; }
+}
+
 .confetti { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
 .confetti span {
   position: absolute; top: -14px;

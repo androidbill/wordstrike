@@ -134,6 +134,18 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     fastestRef.current = null
   }, [room, hotseat])
 
+  // Fireworks celebrate every correct solve; keyed by the move timestamp so
+  // each solve gets a fresh burst.
+  const [fireworksAt, setFireworksAt] = useState(null)
+  useEffect(() => {
+    const m = room.lastMove
+    if (m?.type === 'solve' && m.correct && room.status !== 'finished') {
+      setFireworksAt(m.ts)
+      const t = setTimeout(() => setFireworksAt(null), 1700)
+      return () => clearTimeout(t)
+    }
+  }, [room.lastMove, room.status])
+
   const opponentLeft = !hotseat && room.left?.[rival]
 
   return (
@@ -231,6 +243,8 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           onClose={() => setSolving(null)}
         />
       )}
+
+      {fireworksAt && <Fireworks key={fireworksAt} />}
 
       {(room.status === 'finished' || opponentLeft) && (
         <EndOverlay
@@ -474,6 +488,39 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Short celebratory bursts when a word gets solved.
+function Fireworks() {
+  const bursts = useMemo(
+    () =>
+      Array.from({ length: 4 }, (_, b) => ({
+        left: `${15 + Math.random() * 70}%`,
+        top: `${12 + Math.random() * 45}%`,
+        delay: `${b * 0.22}s`,
+        color: ['#f5c542', '#5b8def', '#e75a7c', '#4ecdc4', '#a78bfa'][Math.floor(Math.random() * 5)],
+        particles: Array.from({ length: 14 }, (_, i) => {
+          const angle = (i / 14) * Math.PI * 2
+          const dist = 46 + Math.random() * 42
+          return {
+            dx: `${Math.cos(angle) * dist}px`,
+            dy: `${Math.sin(angle) * dist}px`
+          }
+        })
+      })),
+    []
+  )
+  return (
+    <div className="fireworks" aria-hidden>
+      {bursts.map((b, bi) => (
+        <span key={bi} className="burst" style={{ left: b.left, top: b.top, '--burst-delay': b.delay, '--burst-color': b.color }}>
+          {b.particles.map((p, pi) => (
+            <i key={pi} style={{ '--dx': p.dx, '--dy': p.dy }} />
+          ))}
+        </span>
+      ))}
     </div>
   )
 }
