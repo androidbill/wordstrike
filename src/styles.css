@@ -131,16 +131,7 @@ h3 { margin: 0; }
   gap: 8px;
   align-items: center;
 }
-/* QR icon mirrors the 3-dot menu in the top-LEFT corner so neither
-   strip covers the centered logo on narrow phones. */
-.qr-btn {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 10px);
-  left: max(12px, env(safe-area-inset-left));
-  z-index: 30;
-  display: grid;
-  place-items: center;
-}
+.qr-btn { display: grid; place-items: center; }
 .qr-room-btn {
   display: inline-flex;
   align-items: center;
