@@ -273,12 +273,20 @@ export function doublePowerupPatch(room, role) {
 }
 
 // ── Pause (live pace only) ──────────────────────────────────────
+// Each player has a 5-minute pause budget for the whole game; pausing
+// again continues from whatever time is left, not a fresh 5:00.
+export function pauseBudgetLeft(room, role) {
+  return Math.max(0, PAUSE_WINDOW_MS - (room.pauseUsed?.[role] || 0))
+}
+
 export function pauseGamePatch(room, role) {
+  const remaining = pauseBudgetLeft(room, role)
+  if (remaining <= 0) return null
   return {
     paused: {
       by: role,
       at: Date.now(),
-      until: Date.now() + PAUSE_WINDOW_MS,
+      until: Date.now() + remaining,
       letterUntil: room.letterUntil || null,
       solveUntil: room.solveUntil || null
     }
@@ -290,6 +298,7 @@ export function resumeGamePatch(room) {
   const elapsed = Date.now() - p.at
   return {
     paused: null,
+    [`pauseUsed/${p.by}`]: Math.min(PAUSE_WINDOW_MS, (room.pauseUsed?.[p.by] || 0) + elapsed),
     letterUntil: p.letterUntil ? p.letterUntil + elapsed : null,
     solveUntil: p.solveUntil ? p.solveUntil + elapsed : null
   }
@@ -319,6 +328,7 @@ export function rematchResetPatch(room) {
     rematch: null,
     taunt: null,
     paused: null,
+    pauseUsed: null,
     turn: 'host'
   }
 }

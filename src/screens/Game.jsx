@@ -4,7 +4,7 @@ import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
   LETTER_WINDOW_MS, letterMovePatch, solveMovePatch,
   letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
-  pauseGamePatch, resumeGamePatch, rematchResetPatch,
+  pauseGamePatch, resumeGamePatch, pauseBudgetLeft, rematchResetPatch,
   isAsync, wordCountOf, windows,
   POWERUPS, revealPowerupPatch, timePowerupPatch, doublePowerupPatch
 } from '../game.js'
@@ -140,8 +140,11 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
 
   // Pause: only on your own turn, for up to 5 minutes; a repause starts a
   // fresh clock. Only the pauser can resume early; at 0:00 it auto-resumes.
+  const myPauseLeft = pauseBudgetLeft(room, myRole)
   const pauseGame = () => {
-    if (!isPaused && myTurn) fire(pauseGamePatch(room, myRole))
+    if (isPaused || !myTurn) return
+    const patch = pauseGamePatch(room, myRole)
+    if (patch) fire(patch)
   }
   const resumeGame = () => {
     if (room.paused && room.paused.by === myRole) fire(resumeGamePatch(room))
@@ -506,7 +509,7 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
       )}
 
       <div className="row game-footer">
-        {myTurn && !relaxed && (
+        {myTurn && !relaxed && myPauseLeft > 0 && (
           <button className="btn ghost leave" onClick={pauseGame}>⏸ Pause</button>
         )}
         <button className="btn ghost leave" onClick={onLeave}>Leave</button>
@@ -519,7 +522,7 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
             <h2 id="pause-title">Game paused</h2>
             <p className="hint">
               {room.paused.by === myRole
-                ? 'You paused the game. It resumes automatically at 0:00.'
+                ? 'You paused the game. This is your pause time for the whole game — it resumes automatically at 0:00.'
                 : `${room.players[room.paused.by].name} paused the game. It resumes when they're ready or at 0:00.`}
             </p>
             <PauseCountdown until={room.paused.until} now={now} />
