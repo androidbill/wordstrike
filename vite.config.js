@@ -1,6 +1,31 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const root = dirname(fileURLToPath(import.meta.url))
+const appVersion = () =>
+  readFileSync(resolve(root, 'src/version.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1]
+
+const versionJson = () => ({
+  name: 'wordstrike-version-json',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: JSON.stringify({ version: appVersion() })
+    })
+  },
+  configureServer(server) {
+    server.middlewares.use('/version.json', (_request, response) => {
+      response.setHeader('Content-Type', 'application/json')
+      response.setHeader('Cache-Control', 'no-store')
+      response.end(JSON.stringify({ version: appVersion() }))
+    })
+  }
+})
 
 export default defineConfig({
   // GitHub Pages serves this repository from /wordstrike/, not the domain root.
@@ -8,6 +33,7 @@ export default defineConfig({
   base: '/wordstrike/',
   plugins: [
     react(),
+    versionJson(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png'],
@@ -28,7 +54,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,json,woff2}']
+        globPatterns: ['**/*.{js,css,html,png,svg,json,woff2}'],
+        globIgnores: ['version.json']
       }
     })
   ],
