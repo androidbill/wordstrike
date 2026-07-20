@@ -14,7 +14,7 @@
 // Letters only (no digits; I/L/O dropped to avoid look-alikes).
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ'
 export const SOLVE_WINDOW_MS = 10_000
-export const LETTER_WINDOW_MS = 30_000
+export const LETTER_WINDOW_MS = 20_000
 
 export function makeRoomCode() {
   let code = ''

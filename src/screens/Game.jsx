@@ -167,7 +167,7 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
           )}
           {letterWindowOpen && (
             <div className="letter-countdown" role="timer" aria-live="polite">
-              <span style={{ '--timer-progress': `${((room.letterUntil - now) / 30_000) * 100}%` }} />
+              <span style={{ '--timer-progress': `${((room.letterUntil - now) / LETTER_WINDOW_MS) * 100}%` }} />
               <strong>{letterSeconds}</strong>
             </div>
           )}
