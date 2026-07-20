@@ -30,30 +30,31 @@ npm run dev
 Open two browser tabs at the dev URL — with no Firebase configured the game
 runs in local demo mode and the tabs can play each other.
 
-## Going online with Firebase
+## Firebase
 
-1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project**
-2. **Build → Realtime Database → Create database** → start in test mode
-3. **Project settings → Your apps → Web app (`</>`)** → register, copy the config
-4. Paste the config into [`src/firebase-config.js`](src/firebase-config.js)
+Already configured: Firebase project **`wordstrike-bd7`**, Realtime Database
+at `wordstrike-bd7-default-rtdb.firebaseio.com`, config in
+[`src/firebase-config.js`](src/firebase-config.js). Security rules live in
+[`database.rules.json`](database.rules.json) (reads/writes scoped to
+`rooms/XXXX`) and deploy with:
 
-That's it — rooms now sync across the internet. Before sharing widely, lock
-down the database rules (test mode expires after 30 days), e.g.:
-
-```json
-{
-  "rules": {
-    "rooms": {
-      "$code": { ".read": true, ".write": true }
-    }
-  }
-}
+```bash
+npx firebase-tools deploy --only database
 ```
+
+To point at a different Firebase project, swap the config in
+`src/firebase-config.js` (set it to `null` to fall back to local demo mode)
+and update `.firebaserc`.
 
 ## Deploying
 
-`npm run build` produces a static `dist/` folder — host it anywhere
-(Firebase Hosting, Netlify, Vercel, GitHub Pages).
+`npm run build` produces a static `dist/` folder — host it anywhere.
+Firebase Hosting is pre-configured in `firebase.json`:
+
+```bash
+npm run build
+npx firebase-tools deploy --only hosting
+```
 
 ## Stack
 

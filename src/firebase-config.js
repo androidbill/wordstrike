@@ -14,4 +14,12 @@
 //
 // While this is null the game runs in LOCAL DEMO MODE: rooms sync
 // between tabs of the same browser only (great for trying it out).
-export const firebaseConfig = null
+export const firebaseConfig = {
+  apiKey: 'AIzaSyCKZLC23cK2xoRQLdsDCONOTzZcp62_7XQ',
+  authDomain: 'wordstrike-bd7.firebaseapp.com',
+  databaseURL: 'https://wordstrike-bd7-default-rtdb.firebaseio.com',
+  projectId: 'wordstrike-bd7',
+  storageBucket: 'wordstrike-bd7.firebasestorage.app',
+  messagingSenderId: '1043235500802',
+  appId: '1:1043235500802:web:902c84986a1ca9b247c81b'
+}
