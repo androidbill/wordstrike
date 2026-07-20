@@ -513,7 +513,7 @@ h3 { margin: 0; }
 .key:not(:disabled):hover { background: #2d3768; transform: translateY(-2px); }
 .key:not(:disabled):active { transform: scale(0.92); }
 .key.hit { background: var(--hit); border-color: var(--hit); color: #05170d; }
-.key.miss { background: #141935; color: #4a5382; border-color: #1d2447; }
+.key.miss { background: #6b1220; color: #d9a3ad; border-color: #8a1b2d; }
 .keyboard.disabled .key:not(.hit):not(.miss) { opacity: 0.55; }
 
 .leave { margin-top: 4px; padding: 8px 18px; font-size: 0.85rem; }

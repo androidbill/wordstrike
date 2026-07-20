@@ -30,8 +30,11 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
   const fire = async (patch) => {
     if (busyRef.current) return
     busyRef.current = true
-    await store.update(room.code, patch)
-    busyRef.current = false
+    try {
+      await store.update(room.code, patch)
+    } finally {
+      busyRef.current = false
+    }
   }
 
   const callLetter = (letter) => {
@@ -79,13 +82,15 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
     return () => clearTimeout(t)
   }, [hotseat, room.turn, room.status, activeRole])
 
-  // Host referees the online rematch: when both flags are up, reset.
+  // Online rematch: when both flags are up, whichever player sees it resets
+  // the room. Both may fire — the patch is identical, so a double write is
+  // harmless — and neither player can be stranded if the other tab is asleep.
   useEffect(() => {
-    if (hotseat || role !== 'host' || room.status !== 'finished') return
+    if (hotseat || room.status !== 'finished') return
     if (room.rematch?.host && room.rematch?.guest) {
       fire(rematchResetPatch())
     }
-  }, [room, role, hotseat])
+  }, [room, hotseat])
 
   const opponentLeft = !hotseat && room.left?.[rival]
 
