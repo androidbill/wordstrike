@@ -11,7 +11,8 @@
 //   left: { host?: true, guest?: true }
 // }
 
-const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+// Letters only (no digits; I/L/O dropped to avoid look-alikes).
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ'
 export const SOLVE_WINDOW_MS = 10_000
 export const LETTER_WINDOW_MS = 30_000
 
@@ -127,6 +128,21 @@ export function solveMovePatch(room, role, wordIndex, attempt) {
     status: won ? 'finished' : 'playing',
     winner: won ? role : null,
     lastMove: { by: role, type: 'solve', wordIndex, correct, ts: Date.now() }
+  }
+}
+
+// Player chose to pass instead of solving — turn moves on immediately.
+export function passSolvePatch(room) {
+  return {
+    turn: otherRole(room.turn),
+    letterUntil: Date.now() + LETTER_WINDOW_MS,
+    solveUntil: null,
+    lastMove: {
+      by: room.turn,
+      type: 'pass',
+      correct: false,
+      ts: Date.now()
+    }
   }
 }
 

@@ -95,7 +95,7 @@ export default function Home({ onCreate, onJoin, onHotseat, error }) {
           <input
             className="code-input"
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
             placeholder="CODE"
             autoFocus
             maxLength={4}

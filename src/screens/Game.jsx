@@ -3,7 +3,7 @@ import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
   LETTER_WINDOW_MS, letterMovePatch, solveMovePatch, letterWindowExpiredPatch,
-  solveWindowExpiredPatch, rematchResetPatch
+  solveWindowExpiredPatch, passSolvePatch, rematchResetPatch
 } from '../game.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
@@ -151,9 +151,18 @@ export default function Game({ room, role, store, hotseat, onLeave }) {
                 : 'Waiting for your rival…'}
           </p>
           {solveWindowOpen && (
-            <div className="solve-countdown" role="timer" aria-live="polite">
-              <span style={{ '--timer-progress': `${((room.solveUntil - now) / 10_000) * 100}%` }} />
-              <strong>{solveSeconds}</strong>
+            <div className="solve-actions">
+              <div className="solve-countdown" role="timer" aria-live="polite">
+                <span style={{ '--timer-progress': `${((room.solveUntil - now) / 10_000) * 100}%` }} />
+                <strong>{solveSeconds}</strong>
+              </div>
+              <button
+                className="btn ghost pass-btn"
+                type="button"
+                onClick={() => { setSolving(null); fire(passSolvePatch(room)) }}
+              >
+                Pass ➜
+              </button>
             </div>
           )}
           {letterWindowOpen && (
@@ -229,7 +238,9 @@ function MoveBanner({ room, role }) {
       ? `${actor} called "${m.letter.toUpperCase()}" — ${m.hits} hit${m.hits > 1 ? 's' : ''}! 🔥`
       : `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
   } else {
-    if (m.type === 'timeout') {
+    if (m.type === 'pass') {
+      text = `${actor} passed on solving 👋`
+    } else if (m.type === 'timeout') {
       text = m.phase === 'letter'
         ? `${actor} ran out of time to pick a letter ⏱️`
         : `${actor}'s solve time ran out ⏱️`
