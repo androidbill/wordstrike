@@ -1,92 +1,127 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getStore } from '../net/store.js'
+import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
-  letterMovePatch, solveMovePatch
+  LETTER_WINDOW_MS, letterMovePatch, solveMovePatch, letterWindowExpiredPatch,
+  solveWindowExpiredPatch, rematchResetPatch
 } from '../game.js'
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
-export default function Game({ room, role, onLeave }) {
-  const rival = otherRole(role)
-  const me = room.players[role]
+export default function Game({ room, role, store, hotseat, onLeave }) {
+  // Hotseat: one device, so the "viewing" role follows whoever holds the
+  // phone; a curtain gates each handoff. Online: the role is fixed.
+  const [activeRole, setActiveRole] = useState(room.turn)
+  const [handoff, setHandoff] = useState(hotseat) // curtain up at game start
+  const myRole = hotseat ? activeRole : role
+  const rival = otherRole(myRole)
+  const me = room.players[myRole]
   const them = room.players[rival]
-  const myTurn = room.turn === role && room.status === 'playing'
+  const myTurn = room.turn === myRole && room.status === 'playing'
   const [view, setView] = useState('attack') // 'attack' | 'defend'
   const [solving, setSolving] = useState(null) // word index
+  const [now, setNow] = useState(Date.now())
   const busyRef = useRef(false)
+  const solveWindowOpen = myTurn && room.solveUntil > now
+  const solveSeconds = solveWindowOpen ? Math.max(1, Math.ceil((room.solveUntil - now) / 1000)) : 0
+  const letterWindowOpen = myTurn && !room.solveUntil && room.letterUntil > now
+  const letterSeconds = letterWindowOpen ? Math.max(1, Math.ceil((room.letterUntil - now) / 1000)) : 0
 
   const fire = async (patch) => {
     if (busyRef.current) return
     busyRef.current = true
-    const store = await getStore()
     await store.update(room.code, patch)
     busyRef.current = false
   }
 
   const callLetter = (letter) => {
-    if (!myTurn || guessedBy(room, role)[letter]) return
-    fire(letterMovePatch(room, role, letter))
+    if (!letterWindowOpen || guessedBy(room, myRole)[letter]) return
+    fire(letterMovePatch(room, myRole, letter))
   }
 
   const submitSolve = (wordIndex, attempt) => {
+    if (!solveWindowOpen) return
     setSolving(null)
-    fire(solveMovePatch(room, role, wordIndex, attempt))
+    fire(solveMovePatch(room, myRole, wordIndex, attempt))
   }
 
-  // Host referees the rematch: when both flags are up, reset to the lobby.
   useEffect(() => {
-    if (role !== 'host' || room.status !== 'finished') return
-    if (room.rematch?.host && room.rematch?.guest) {
-      fire({
-        status: 'lobby',
-        'players/host/words': null,
-        'players/host/ready': false,
-        'players/guest/words': null,
-        'players/guest/ready': false,
-        guessed: null,
-        solved: null,
-        lastMove: null,
-        winner: null,
-        rematch: null,
-        turn: 'host'
-      })
-    }
-  }, [room, role])
+    if ((!room.solveUntil && !room.letterUntil) || room.status !== 'playing') return
+    const tick = () => setNow(Date.now())
+    tick()
+    const interval = setInterval(tick, 200)
+    return () => clearInterval(interval)
+  }, [room.solveUntil, room.letterUntil, room.status])
 
-  const opponentLeft = room.left?.[rival]
+  // Give rooms created by an older app build a deadline as soon as the
+  // current player opens them.
+  useEffect(() => {
+    if (!myTurn || room.solveUntil || room.letterUntil || room.status !== 'playing') return
+    fire({ letterUntil: Date.now() + LETTER_WINDOW_MS })
+  }, [myTurn, room.solveUntil, room.letterUntil, room.status])
+
+  useEffect(() => {
+    if (!myTurn || room.solveUntil || !room.letterUntil || room.status !== 'playing' || Date.now() < room.letterUntil) return
+    fire(letterWindowExpiredPatch(room))
+  }, [now, myTurn, room.letterUntil, room.solveUntil, room.status])
+
+  useEffect(() => {
+    if (!myTurn || !room.solveUntil || room.status !== 'playing' || Date.now() < room.solveUntil) return
+    setSolving(null)
+    fire(solveWindowExpiredPatch(room))
+  }, [now, myTurn, room.solveUntil, room.status])
+
+  // Hotseat handoff: once the turn flips away from the player holding the
+  // phone, give them a moment to watch the reveal, then drop the curtain.
+  useEffect(() => {
+    if (!hotseat || room.status !== 'playing' || room.turn === activeRole) return
+    const t = setTimeout(() => setHandoff(true), 1800)
+    return () => clearTimeout(t)
+  }, [hotseat, room.turn, room.status, activeRole])
+
+  // Host referees the online rematch: when both flags are up, reset.
+  useEffect(() => {
+    if (hotseat || role !== 'host' || room.status !== 'finished') return
+    if (room.rematch?.host && room.rematch?.guest) {
+      fire(rematchResetPatch())
+    }
+  }, [room, role, hotseat])
+
+  const opponentLeft = !hotseat && room.left?.[rival]
 
   return (
     <div className="screen game">
       <header className="game-header">
-        <PlayerBadge player={me} label="You" active={room.turn === role && room.status === 'playing'} score={solvedCount(room, role)} />
+        <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} />
         <div className="turn-pill-wrap">
           {room.status === 'playing' && (
             <span className={`turn-pill ${myTurn ? 'mine' : ''}`}>
-              {myTurn ? 'Your turn' : `${them.name}'s turn`}
+              {myTurn ? (hotseat ? `${me.name}'s turn` : 'Your turn') : `${them.name}'s turn`}
             </span>
           )}
         </div>
-        <PlayerBadge player={them} label="Rival" active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} right />
+        <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} right />
       </header>
 
-      <MoveBanner room={room} role={role} />
+      <MoveBanner room={room} role={myRole} />
 
-      <div className="board-tabs">
-        <button className={`tab ${view === 'attack' ? 'on' : ''}`} onClick={() => setView('attack')}>
-          ⚔️ {them.name}'s words
-        </button>
-        <button className={`tab ${view === 'defend' ? 'on' : ''}`} onClick={() => setView('defend')}>
-          🛡️ Your words
-        </button>
-      </div>
+      {!hotseat && (
+        <div className="board-tabs">
+          <button className={`tab ${view === 'attack' ? 'on' : ''}`} onClick={() => setView('attack')}>
+            ⚔️ {them.name}'s words
+          </button>
+          <button className={`tab ${view === 'defend' ? 'on' : ''}`} onClick={() => setView('defend')}>
+            🛡️ Your words
+          </button>
+        </div>
+      )}
 
-      {view === 'attack' ? (
+      {view === 'attack' || hotseat ? (
         <Board
-          words={targetWords(room, role)}
-          guessed={guessedBy(room, role)}
-          solved={solvedBy(room, role)}
-          canSolve={myTurn}
+          words={targetWords(room, myRole)}
+          guessed={guessedBy(room, myRole)}
+          solved={solvedBy(room, myRole)}
+          canSolve={solveWindowOpen}
           onSolve={setSolving}
           animate
         />
@@ -99,13 +134,33 @@ export default function Game({ room, role, onLeave }) {
         />
       )}
 
-      {view === 'attack' && room.status === 'playing' && (
+      {(view === 'attack' || hotseat) && room.status === 'playing' && (
         <>
-          <p className="kb-hint">{myTurn ? 'Call a letter — or tap a word to solve it' : 'Waiting for your rival…'}</p>
-          <Keyboard guessed={guessedBy(room, role)} disabled={!myTurn} onKey={callLetter} />
+          <p className="kb-hint">
+            {myTurn
+              ? solveWindowOpen
+                ? `Solve a word now — ${solveSeconds} second${solveSeconds === 1 ? '' : 's'} left`
+                : `Pick a letter — ${letterSeconds} second${letterSeconds === 1 ? '' : 's'} left`
+              : hotseat
+                ? `Nice — hand the phone to ${them.name} when you're ready`
+                : 'Waiting for your rival…'}
+          </p>
+          {solveWindowOpen && (
+            <div className="solve-countdown" role="timer" aria-live="polite">
+              <span style={{ '--timer-progress': `${((room.solveUntil - now) / 10_000) * 100}%` }} />
+              <strong>{solveSeconds}</strong>
+            </div>
+          )}
+          {letterWindowOpen && (
+            <div className="letter-countdown" role="timer" aria-live="polite">
+              <span style={{ '--timer-progress': `${((room.letterUntil - now) / 30_000) * 100}%` }} />
+              <strong>{letterSeconds}</strong>
+            </div>
+          )}
+          <Keyboard guessed={guessedBy(room, myRole)} disabled={!letterWindowOpen} onKey={callLetter} />
         </>
       )}
-      {view === 'defend' && room.status === 'playing' && (
+      {view === 'defend' && !hotseat && room.status === 'playing' && (
         <p className="kb-hint">Letters your rival has uncovered. Solved words show gold.</p>
       )}
 
@@ -113,16 +168,35 @@ export default function Game({ room, role, onLeave }) {
 
       {solving !== null && (
         <SolveModal
-          word={targetWords(room, role)[solving]}
+          word={targetWords(room, myRole)[solving]}
           index={solving}
-          guessed={guessedBy(room, role)}
+          guessed={guessedBy(room, myRole)}
           onSubmit={submitSolve}
           onClose={() => setSolving(null)}
         />
       )}
 
       {(room.status === 'finished' || opponentLeft) && (
-        <EndOverlay room={room} role={role} onLeave={onLeave} onRematch={() => fire({ [`rematch/${role}`]: true })} opponentLeft={opponentLeft} />
+        <EndOverlay
+          room={room}
+          role={myRole}
+          hotseat={hotseat}
+          onLeave={onLeave}
+          onRematch={() => fire(hotseat ? rematchResetPatch() : { [`rematch/${myRole}`]: true })}
+          opponentLeft={opponentLeft}
+        />
+      )}
+
+      {hotseat && handoff && room.status === 'playing' && (
+        <Curtain
+          avatar={room.players[room.turn].avatar}
+          name={room.players[room.turn].name}
+          hint="No peeking while the phone changes hands!"
+          onReady={() => {
+            setActiveRole(room.turn)
+            setHandoff(false)
+          }}
+        />
       )}
     </div>
   )
@@ -150,9 +224,15 @@ function MoveBanner({ room, role }) {
       ? `${actor} called "${m.letter.toUpperCase()}" — ${m.hits} hit${m.hits > 1 ? 's' : ''}! 🔥`
       : `${actor} called "${m.letter.toUpperCase()}" — miss 💨`
   } else {
-    text = m.correct
-      ? `${actor} solved word #${m.wordIndex + 1}! ⚡`
-      : `${actor} fumbled a solve on word #${m.wordIndex + 1} 😬`
+    if (m.type === 'timeout') {
+      text = m.phase === 'letter'
+        ? `${actor} ran out of time to pick a letter ⏱️`
+        : `${actor}'s solve time ran out ⏱️`
+    } else {
+      text = m.correct
+        ? `${actor} solved word #${m.wordIndex + 1}! ⚡`
+        : `${actor} fumbled a solve on word #${m.wordIndex + 1} 😬`
+    }
   }
   return <div key={m.ts} className={`move-banner ${m.correct ? 'hit' : 'miss'}`}>{text}</div>
 }
@@ -229,25 +309,36 @@ function Keyboard({ guessed, disabled, onKey }) {
 }
 
 function SolveModal({ word, index, guessed, onSubmit, onClose }) {
-  const [attempt, setAttempt] = useState('')
+  const blankIndexes = useMemo(
+    () => [...word].map((_, i) => i).filter((i) => !guessed[word[i]]),
+    [word, guessed]
+  )
+  const [blankLetters, setBlankLetters] = useState('')
   const inputRef = useRef(null)
+
+  const attempt = [...word]
+  blankIndexes.forEach((wordIndex, blankIndex) => {
+    attempt[wordIndex] = blankLetters[blankIndex] || ''
+  })
 
   const submit = (e) => {
     e.preventDefault()
-    if (attempt.length === 5) onSubmit(index, attempt)
+    if (blankLetters.length === blankIndexes.length) onSubmit(index, attempt.join(''))
   }
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <form className="sheet solve" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3>Solve word #{index + 1}</h3>
-        <p className="hint">Get it right and you keep your turn. Miss and it passes.</p>
+        <p className="hint">Type only the highlighted blank letters. Get it right and the timer restarts.</p>
         <div className="solve-tiles" onClick={() => inputRef.current?.focus()}>
           {[0, 1, 2, 3, 4].map((i) => {
             const known = guessed[word[i]] ? word[i] : null
+            const blankIndex = blankIndexes.indexOf(i)
+            const typed = blankIndex >= 0 ? blankLetters[blankIndex] : ''
             return (
-              <span key={i} className={`tile ${attempt[i] ? 'typed' : known ? 'revealed' : ''}`}>
-                {attempt[i] || known || ''}
+              <span key={i} className={`tile ${typed ? 'typed' : known ? 'revealed locked' : 'solve-blank'}`}>
+                {typed || known || ''}
               </span>
             )
           })}
@@ -255,8 +346,8 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
         <input
           ref={inputRef}
           className="ghost-input"
-          value={attempt}
-          onChange={(e) => setAttempt(e.target.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, 5))}
+          value={blankLetters}
+          onChange={(e) => setBlankLetters(e.target.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, blankIndexes.length))}
           autoFocus
           autoCapitalize="off"
           autoCorrect="off"
@@ -265,27 +356,41 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
         />
         <div className="row">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={attempt.length !== 5}>Solve!</button>
+          <button className="btn primary" disabled={blankLetters.length !== blankIndexes.length}>Solve!</button>
         </div>
       </form>
     </div>
   )
 }
 
-function EndOverlay({ room, role, onLeave, onRematch, opponentLeft }) {
+function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
   const won = room.winner === role
   const rival = otherRole(role)
-  const iWantRematch = room.rematch?.[role]
-  const theyWantRematch = room.rematch?.[rival]
+  const winner = room.winner ? room.players[room.winner] : null
+  const loserRole = room.winner ? otherRole(room.winner) : rival
+  const iWantRematch = !hotseat && room.rematch?.[role]
+  const theyWantRematch = !hotseat && room.rematch?.[rival]
 
   return (
     <div className="end-overlay">
-      {won && <Confetti />}
+      {(won || (hotseat && winner)) && <Confetti />}
       <div className="end-card">
         {opponentLeft && !room.winner ? (
           <>
             <span className="end-emoji">🚪</span>
             <h2>Rival left the room</h2>
+          </>
+        ) : hotseat ? (
+          <>
+            <span className="end-emoji">🏆</span>
+            <h2>{winner.avatar} {winner.name} wins!</h2>
+            <p className="hint">All five of {room.players[loserRole].name}'s words — cracked.</p>
+            <div className="final-words">
+              <span className="final-label">{room.players[loserRole].name}'s words were:</span>
+              <div className="final-list">
+                {(room.players[loserRole].words || []).map((w) => <span key={w} className="word-chip">{w}</span>)}
+              </div>
+            </div>
           </>
         ) : (
           <>

@@ -13,4 +13,10 @@ export function getStore() {
   return storePromise
 }
 
+// Pass-and-play (hotseat) rooms always live in the local backend so they
+// work fully offline, even when Firebase is configured for online rooms.
+export function getStoreFor(session) {
+  return session?.hotseat ? Promise.resolve(localStore) : getStore()
+}
+
 export const isLocalMode = !firebaseConfig

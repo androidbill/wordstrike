@@ -6,7 +6,7 @@ const AVATARS = [
   '👽', '🤖', '👻', '🧙', '🥷', '🦸', '🧛', '🏴‍☠️'
 ]
 
-export default function Profile({ initial, onDone, onBack }) {
+export default function Profile({ initial, onDone, onBack, title = "Who's playing?" }) {
   const [name, setName] = useState(initial?.name || '')
   const [avatar, setAvatar] = useState(initial?.avatar || AVATARS[0])
   const [busy, setBusy] = useState(false)
@@ -22,7 +22,7 @@ export default function Profile({ initial, onDone, onBack }) {
 
   return (
     <form className="screen profile" onSubmit={submit}>
-      <h2>Who's playing?</h2>
+      <h2>{title}</h2>
       <div className="avatar-preview">{avatar}</div>
       <input
         className="name-input"

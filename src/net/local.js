@@ -17,6 +17,16 @@ function write(code, room) {
   listeners.forEach((fn) => fn(code))
 }
 
+// Purge rooms older than a day so pass-and-play games don't pile up.
+try {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith(PREFIX)) continue
+    const room = JSON.parse(localStorage.getItem(key))
+    if (!room?.createdAt || room.createdAt < cutoff) localStorage.removeItem(key)
+  }
+} catch { /* corrupt entries are removed on next successful parse */ }
+
 function applyPath(obj, path, value) {
   const keys = path.split('/')
   let node = obj
@@ -43,6 +53,12 @@ export const localStore = {
     if (!room) return
     for (const [path, value] of Object.entries(patch)) applyPath(room, path, value)
     write(code, room)
+  },
+
+  async deleteRoom(code) {
+    localStorage.removeItem(PREFIX + code)
+    channel.postMessage(code)
+    listeners.forEach((fn) => fn(code))
   },
 
   subscribe(code, cb) {
