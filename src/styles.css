@@ -1082,3 +1082,173 @@ h3 { margin: 0; }
 @media (min-width: 480px) {
   .screen { padding-top: 32px; }
 }
+
+/* ── Solo Strike ─────────────────────────────────────────────── */
+.solo-pick {
+  justify-content: flex-start;
+  gap: 0;
+}
+.solo-pick-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: 48px;
+  width: 100%;
+}
+.solo-pick-inner h2 { margin: 0; font-size: 1.6rem; }
+.solo-streak-row {
+  display: flex;
+  gap: 24px;
+}
+.solo-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.solo-stat-val { font-size: 1.5rem; font-weight: 700; color: var(--gold); }
+.solo-len-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.solo-back { align-self: flex-start; margin-bottom: 4px; }
+
+.solo-game {
+  justify-content: flex-start;
+  gap: 0;
+  padding-bottom: 12px;
+}
+.solo-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.solo-title { flex: 1; font-weight: 700; font-size: 1.1rem; text-align: center; }
+.solo-back-sm {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+.solo-streak-chip {
+  background: rgba(245,197,66,0.15);
+  color: var(--gold);
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+}
+
+.solo-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 auto 10px;
+}
+.solo-grid-5 { width: min(300px, 90vw); }
+.solo-grid-6 { width: min(340px, 95vw); }
+
+.solo-row {
+  display: flex;
+  gap: 5px;
+}
+.solo-cell {
+  flex: 1;
+  aspect-ratio: 1;
+  border: 2px solid var(--tile-border);
+  border-radius: 8px;
+  background: var(--tile-hidden);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, border-color 0.15s;
+}
+.solo-cell.solo-filled {
+  border-color: var(--ink-dim);
+  background: var(--bg2);
+}
+.solo-cell.hit {
+  background: var(--hit);
+  border-color: var(--hit);
+  color: #fff;
+  animation: solo-flip 0.35s ease both;
+}
+.solo-cell.present {
+  background: var(--gold-deep);
+  border-color: var(--gold-deep);
+  color: #fff;
+  animation: solo-flip 0.35s ease both;
+}
+.solo-cell.miss {
+  background: var(--miss);
+  border-color: var(--miss);
+  animation: solo-flip 0.35s ease both;
+}
+@keyframes solo-flip {
+  0%   { transform: rotateX(0deg); }
+  50%  { transform: rotateX(90deg); }
+  100% { transform: rotateX(0deg); }
+}
+.solo-shake { animation: solo-shake 0.4s ease; }
+@keyframes solo-shake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-6px); }
+  40%     { transform: translateX(6px); }
+  60%     { transform: translateX(-4px); }
+  80%     { transform: translateX(4px); }
+}
+.solo-invalid {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--danger);
+  text-align: center;
+}
+.solo-result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.solo-result-emoji { font-size: 1.5rem; }
+.solo-result-text { font-size: 1rem; color: var(--ink); }
+.solo-end-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Keyboard */
+.solo-kb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.solo-kb-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+.solo-key {
+  flex: 1;
+  max-width: 40px;
+  height: 54px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.solo-key:active { opacity: 0.7; }
+.solo-key-wide { max-width: 58px; font-size: 0.75rem; }
+.solo-key.hit { background: var(--hit); color: #fff; }
+.solo-key.present { background: var(--gold-deep); color: #fff; }
+.solo-key.miss { background: var(--miss); color: var(--ink-dim); }

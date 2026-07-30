@@ -9,6 +9,7 @@ import Game from './screens/Game.jsx'
 import Curtain from './screens/Curtain.jsx'
 import ThemePicker from './screens/ThemePicker.jsx'
 import Setup from './screens/Setup.jsx'
+import Solo from './screens/Solo.jsx'
 import { BOT_LEVELS, botWords } from './bot.js'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
 import { applyTheme } from './themes.js'
@@ -117,6 +118,7 @@ export default function App() {
   const startCreate = () => setFlow({ mode: 'create', step: 'profile' })
   const startHotseat = () => setFlow({ mode: 'hotseat', step: 'profile1' })
   const startPractice = () => setFlow({ mode: 'practice', step: 'profile' })
+  const startSolo = () => setFlow({ mode: 'solo' })
 
   const onPracticeStart = async (level) => {
     const code = makeRoomCode()
@@ -313,8 +315,10 @@ export default function App() {
     screen = <Profile title="Player 1, who are you?" initial={profile} onDone={onProfileDone} onBack={() => setFlow(null)} />
   } else if (flow?.step === 'profile2') {
     screen = <Profile key="p2" title="Player 2, who are you?" initial={null} onDone={onProfileDone} onBack={() => setFlow({ ...flow, step: 'profile1' })} />
+  } else if (flow?.mode === 'solo') {
+    screen = <Solo onBack={() => setFlow(null)} />
   } else {
-    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} error={error} />
+    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} onSolo={startSolo} error={error} />
   }
 
   return (

@@ -10,7 +10,7 @@ import { isMuted, toggleMuted } from '../sounds.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
-export default function Home({ onCreate, onJoin, onHotseat, onPractice, error }) {
+export default function Home({ onCreate, onJoin, onHotseat, onPractice, onSolo, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -117,6 +117,10 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, error })
           <button className="btn ghost big" onClick={onHotseat}>
             🤝 Pass &amp; Play
             <span className="btn-sub">one device · works offline</span>
+          </button>
+          <button className="btn ghost big" onClick={onSolo}>
+            🎯 Solo Strike
+            <span className="btn-sub">guess the word · endless mode</span>
           </button>
           <button className="btn ghost big" onClick={onPractice}>
             🤖 Practice
