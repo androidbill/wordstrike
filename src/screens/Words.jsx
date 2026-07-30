@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { isValidWord, searchWords, randomCommonWord } from '../words.js'
 
-export default function Words({ title, onDone, onBack, count = 5 }) {
+export default function Words({ title, onDone, onBack, count = 5, wordLen = 5 }) {
   const [words, setWords] = useState(() => Array.from({ length: count }, () => ''))
   const [valid, setValid] = useState(() => Array.from({ length: count }, () => null)) // null=unknown
   const [browsing, setBrowsing] = useState(null) // slot index or null
   const [busy, setBusy] = useState(false)
 
   const setWord = (i, raw) => {
-    const w = raw.toLowerCase().replace(/[^a-z]/g, '').slice(0, 5)
+    const w = raw.toLowerCase().replace(/[^a-z]/g, '').slice(0, wordLen)
     setWords((prev) => prev.map((p, j) => (j === i ? w : p)))
-    if (w.length < 5) {
+    if (w.length < wordLen) {
       setValid((prev) => prev.map((p, j) => (j === i ? null : p)))
     } else {
       isValidWord(w).then((ok) =>
@@ -19,10 +19,10 @@ export default function Words({ title, onDone, onBack, count = 5 }) {
     }
   }
 
-  const roll = (i) => setWord(i, randomCommonWord(words))
+  const roll = (i) => setWord(i, randomCommonWord(words, wordLen))
   const rollAll = () => {
     const picked = []
-    for (let i = 0; i < count; i++) picked.push(randomCommonWord(picked))
+    for (let i = 0; i < count; i++) picked.push(randomCommonWord(picked, wordLen))
     setWords(picked)
     setValid(picked.map(() => true))
   }
@@ -49,8 +49,8 @@ export default function Words({ title, onDone, onBack, count = 5 }) {
             <input
               value={w}
               onChange={(e) => setWord(i, e.target.value)}
-              placeholder="·····"
-              maxLength={5}
+              placeholder={'·'.repeat(wordLen)}
+              maxLength={wordLen}
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -62,7 +62,7 @@ export default function Words({ title, onDone, onBack, count = 5 }) {
         ))}
       </div>
 
-      {!unique && words.every((w) => w.length === 5) && <p className="error">Words must all be different</p>}
+      {!unique && words.every((w) => w.length === wordLen) && <p className="error">Words must all be different</p>}
       {valid.some((v) => v === false) && <p className="error">Red words aren't in the dictionary</p>}
 
       <div className="row">
@@ -75,6 +75,7 @@ export default function Words({ title, onDone, onBack, count = 5 }) {
 
       {browsing !== null && (
         <BrowseSheet
+          wordLen={wordLen}
           onPick={(w) => {
             setWord(browsing, w)
             setBrowsing(null)
@@ -86,17 +87,17 @@ export default function Words({ title, onDone, onBack, count = 5 }) {
   )
 }
 
-function BrowseSheet({ onPick, onClose }) {
+function BrowseSheet({ onPick, onClose, wordLen = 5 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const seq = useRef(0)
 
   useEffect(() => {
     const id = ++seq.current
-    searchWords(query || 'a').then((r) => {
+    searchWords(query || 'a', 60, wordLen).then((r) => {
       if (seq.current === id) setResults(r)
     })
-  }, [query])
+  }, [query, wordLen])
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -105,7 +106,7 @@ function BrowseSheet({ onPick, onClose }) {
           className="search-input"
           value={query}
           onChange={(e) => setQuery(e.target.value.toLowerCase().replace(/[^a-z]/g, ''))}
-          placeholder="Search 12,578 words…"
+          placeholder={`Search ${wordLen}-letter words…`}
           autoFocus
           autoCapitalize="off"
           autoCorrect="off"

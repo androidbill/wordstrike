@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getStore, getStoreFor, isLocalMode } from './net/store.js'
-import { makeRoomCode, newRoom, startPlayingPatch, wordCountOf } from './game.js'
+import { makeRoomCode, newRoom, startPlayingPatch, wordCountOf, wordLenOf } from './game.js'
 import Home from './screens/Home.jsx'
 import Profile from './screens/Profile.jsx'
 import Words from './screens/Words.jsx'
@@ -236,9 +236,10 @@ export default function App() {
               key="p1"
               avatar={host.avatar}
               name={host.name}
-              hint="Pick your 5 secret words — no peeking behind you!"
+              hint="Pick your secret words — no peeking behind you!"
               title={`${host.name}, pick your ${wordCountOf(room)} words`}
               count={wordCountOf(room)}
+              wordLen={wordLenOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -252,6 +253,7 @@ export default function App() {
               hint={`${host.name} has locked in. Your turn to pick — no peeking behind you!`}
               title={`${guest.name}, pick your ${wordCountOf(room)} words`}
               count={wordCountOf(room)}
+              wordLen={wordLenOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -268,7 +270,7 @@ export default function App() {
           // Host waiting for guest to arrive before picking words.
           screen = <Lobby room={room} role={session.role} onLeave={leaveRoom} />
         } else {
-          screen = <Words title={`Pick your ${wordCountOf(room)} words`} count={wordCountOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
+          screen = <Words title={`Pick your ${wordCountOf(room)} words`} count={wordCountOf(room)} wordLen={wordLenOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
         }
       }
     } else {

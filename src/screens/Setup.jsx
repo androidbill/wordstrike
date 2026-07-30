@@ -4,6 +4,7 @@ import { useState } from 'react'
 export default function Setup({ allowAsync, onDone, onBack }) {
   const [pace, setPace] = useState('live')
   const [wordCount, setWordCount] = useState(5)
+  const [wordLen, setWordLen] = useState(5)
   const [blitz, setBlitz] = useState(false)
 
   return (
@@ -42,6 +43,20 @@ export default function Setup({ allowAsync, onDone, onBack }) {
         </div>
       </div>
 
+      <div className="setup-group">
+        <span className="setup-label">Word length</span>
+        <div className="setup-options">
+          <button type="button" className={`setup-card slim ${wordLen === 5 ? 'picked' : ''}`} onClick={() => setWordLen(5)}>
+            <strong>5 letters</strong>
+            <span className="setup-desc">Classic</span>
+          </button>
+          <button type="button" className={`setup-card slim ${wordLen === 6 ? 'picked' : ''}`} onClick={() => setWordLen(6)}>
+            <strong>6 letters</strong>
+            <span className="setup-desc">More challenge</span>
+          </button>
+        </div>
+      </div>
+
       {pace === 'live' && (
         <div className="setup-group">
           <span className="setup-label">Speed</span>
@@ -60,7 +75,7 @@ export default function Setup({ allowAsync, onDone, onBack }) {
 
       <div className="row">
         <button className="btn ghost" type="button" onClick={onBack}>Back</button>
-        <button className="btn primary" type="button" onClick={() => onDone({ pace: allowAsync ? pace : 'live', wordCount, blitz })}>
+        <button className="btn primary" type="button" onClick={() => onDone({ pace: allowAsync ? pace : 'live', wordCount, wordLen, blitz })}>
           Continue
         </button>
       </div>

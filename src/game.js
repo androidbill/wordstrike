@@ -15,8 +15,53 @@
 //   seen: { host: ts, guest: ts }            // heartbeat for presence
 // }
 
-// Letters only (no digits; I/L/O dropped to avoid look-alikes).
-const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ'
+// Four-letter common words used as room codes — easy to say aloud.
+const ROOM_CODE_WORDS = [
+  'ABLE','ARCH','ARMY','BACK','BAKE','BALL','BAND','BARK','BASE','BATH',
+  'BEAM','BEAR','BEAT','BELL','BELT','BEND','BIKE','BIRD','BITE','BLUE',
+  'BOAT','BOLD','BOLT','BOND','BONE','BOOK','BOOT','BOWL','BURN','BUZZ',
+  'CAGE','CAKE','CALM','CAMP','CANE','CARD','CARE','CART','CAVE','CHEF',
+  'CHIP','CLAY','CLUB','CLUE','COAL','COAT','CODE','COIN','COLD','COOK',
+  'COOL','CORE','CORN','COST','COVE','CROP','CURL','DARK','DART','DASH',
+  'DAWN','DEAL','DECK','DEEP','DENT','DESK','DISH','DIVE','DOCK','DOME',
+  'DOOR','DOVE','DRAW','DRUM','DUCK','DUNE','DUSK','DUST','DUTY','EARN',
+  'EAST','EDGE','EPIC','FACT','FAIR','FALL','FAME','FARM','FAST','FATE',
+  'FILE','FILM','FIRE','FISH','FLAG','FLAT','FLIP','FLOW','FOAM','FOLD',
+  'FOLK','FOND','FOOD','FORD','FORK','FORT','FREE','FROG','FUEL','FULL',
+  'FUND','FUSE','GALE','GAME','GATE','GEAR','GLOW','GLUE','GOAL','GOAT',
+  'GOLD','GOLF','GOOD','GORE','GRAB','GRID','GRIN','GRIP','GROW','GULF',
+  'GUST','HAIL','HAIR','HALF','HALL','HAND','HANG','HARD','HARP','HAZE',
+  'HEAL','HEAP','HEAT','HELM','HELP','HERB','HIGH','HILL','HINT','HIVE',
+  'HOLD','HOLE','HOME','HOOK','HOPE','HORN','HOST','HUGE','HULL','HUNT',
+  'IDLE','IRON','JADE','JAIL','JOKE','JUMP','JURY','JUST','KEEN','KEEP',
+  'KICK','KIND','KING','KNOT','KNOW','LACE','LAKE','LAMB','LAMP','LAND',
+  'LANE','LARK','LAST','LATE','LAVA','LAWN','LEAD','LEAF','LEAN','LEAP',
+  'LEFT','LEND','LENS','LIFT','LIKE','LILY','LIME','LINK','LION','LIST',
+  'LIVE','LOCK','LOFT','LONG','LOOK','LOOP','LORE','LOVE','LUCK','LURE',
+  'LUSH','MADE','MAIL','MAKE','MANE','MARE','MARK','MASK','MASS','MAZE',
+  'MEAL','MEAT','MELT','MESH','MILD','MILE','MILK','MILL','MIND','MINE',
+  'MINT','MIST','MODE','MOON','MORE','MOSS','MOTH','MOVE','MULE','MYTH',
+  'NAIL','NAME','NEAR','NECK','NEST','NEXT','NICE','NODE','NORM','NOTE',
+  'OATH','ONCE','OPEN','OVAL','PACE','PACK','PAGE','PAIL','PAIR','PALE',
+  'PALM','PARK','PART','PATH','PEAK','PEEL','PICK','PILE','PINE','PIPE',
+  'PLUM','POEM','POLE','POOL','PORT','POSE','POST','POUR','PREY','PUMP',
+  'PURE','PUSH','RACK','RAIN','RANK','RARE','RATE','READ','REAL','REEF',
+  'REEL','RENT','RICE','RICH','RIDE','RING','RINK','RISE','RISK','ROAD',
+  'ROAR','ROCK','ROLE','ROLL','ROOF','ROPE','ROSE','RULE','RUSH','RUST',
+  'SAFE','SAGE','SAIL','SALT','SAND','SAVE','SEAL','SEAT','SEED','SEEK',
+  'SELF','SELL','SEND','SHIP','SHOE','SHOW','SILK','SING','SINK','SKIN',
+  'SLAB','SLIM','SLIP','SLOW','SNAP','SOIL','SOLE','SONG','SOUL','SPAN',
+  'SPIN','SPOT','SPUR','STAR','STAY','STEM','STEP','STIR','STOP','SUIT',
+  'SURF','SWAN','SWAY','SWIM','TALE','TALL','TAME','TANG','TASK','TEAM',
+  'TEAR','TELL','TEND','TENT','TEST','TILT','TIME','TINY','TIRE','TOLL',
+  'TOMB','TONE','TOOL','TOWN','TREK','TRIM','TRIP','TROT','TRUE','TUBE',
+  'TUNE','TURF','TURN','TWIN','TWIG','VALE','VAST','VEIL','VEST','VIEW',
+  'VINE','VOLT','WADE','WAGE','WAKE','WALK','WALL','WAND','WARM','WASH',
+  'WAVE','WEAK','WEAR','WEED','WEEK','WELL','WEST','WILD','WILL','WIND',
+  'WING','WIRE','WISE','WISH','WOLF','WOOD','WOOL','WORD','WORM','WRAP',
+  'YEAR','YELL','YOGA','ZEAL','ZERO','ZONE','ZOOM'
+]
+
 export const SOLVE_WINDOW_MS = 10_000
 export const LETTER_WINDOW_MS = 20_000
 export const BLITZ_LETTER_MS = 7_000
@@ -24,9 +69,7 @@ export const BLITZ_SOLVE_MS = 6_000
 export const PAUSE_WINDOW_MS = 5 * 60_000
 
 export function makeRoomCode() {
-  let code = ''
-  for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
-  return code
+  return ROOM_CODE_WORDS[Math.floor(Math.random() * ROOM_CODE_WORDS.length)]
 }
 
 export function otherRole(role) {
@@ -35,6 +78,10 @@ export function otherRole(role) {
 
 export function wordCountOf(room) {
   return room.wordCount || 5
+}
+
+export function wordLenOf(room) {
+  return room.wordLen || 5
 }
 
 export function isAsync(room) {
@@ -63,6 +110,7 @@ function emptySolved(n) {
 
 export function newRoom(code, hostProfile, hostWords, opts = {}) {
   const wordCount = opts.wordCount || 5
+  const wordLen = opts.wordLen || 5
   return {
     code,
     createdAt: Date.now(),
@@ -70,6 +118,7 @@ export function newRoom(code, hostProfile, hostWords, opts = {}) {
     pace: opts.pace || 'live',
     blitz: !!opts.blitz,
     wordCount,
+    wordLen,
     players: {
       host: { ...hostProfile, words: hostWords, ready: hostWords != null },
       guest: null

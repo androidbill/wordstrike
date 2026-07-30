@@ -1,4 +1,4 @@
-// Dictionary access. The full 12.5k-word list loads lazily; random picks and
+// Dictionary access. The full word list loads lazily; random picks and
 // suggestions draw from a curated common-word pool so they stay guessable.
 let dictPromise = null
 
@@ -14,12 +14,13 @@ export async function isValidWord(word) {
   return dict.has(word.toLowerCase())
 }
 
-export async function searchWords(query, limit = 60) {
+export async function searchWords(query, limit = 60, wordLen = 5) {
   const dict = await loadDict()
   const q = query.toLowerCase()
   const starts = []
   const contains = []
   for (const w of dict) {
+    if (w.length !== wordLen) continue
     if (w.startsWith(q)) starts.push(w)
     else if (w.includes(q)) contains.push(w)
     if (starts.length >= limit) break
@@ -27,8 +28,8 @@ export async function searchWords(query, limit = 60) {
   return [...starts, ...contains].slice(0, limit)
 }
 
-export function randomCommonWord(exclude = []) {
-  const pool = COMMON.filter((w) => !exclude.includes(w))
+export function randomCommonWord(exclude = [], wordLen = 5) {
+  const pool = (wordLen === 6 ? COMMON_6 : COMMON).filter((w) => !exclude.includes(w))
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
@@ -108,3 +109,45 @@ export const COMMON = [
   'wound', 'woven', 'wrist', 'write', 'wrong', 'yacht', 'yeast', 'yield', 'young', 'youth',
   'zebra', 'zesty'
 ].filter((w) => w.length === 5)
+
+export const COMMON_6 = [
+  'accept', 'access', 'action', 'active', 'afraid', 'agency', 'animal', 'answer', 'anyone',
+  'appear', 'around', 'artist', 'aspect', 'attack', 'author', 'autumn', 'avenue', 'baking',
+  'banana', 'battle', 'beacon', 'beauty', 'became', 'before', 'behind', 'belief', 'belong',
+  'better', 'beyond', 'bishop', 'bitter', 'blanket', 'blossom', 'border', 'bottle', 'bottom',
+  'bounce', 'branch', 'bridge', 'bright', 'broker', 'bronze', 'bubble', 'bucket', 'budget',
+  'burden', 'button', 'buying', 'camera', 'candle', 'canyon', 'captain', 'carbon', 'castle',
+  'casual', 'caught', 'center', 'change', 'charge', 'chosen', 'circle', 'cities', 'client',
+  'closed', 'clouds', 'coffee', 'column', 'combat', 'coming', 'common', 'cotton', 'couple',
+  'create', 'credit', 'crisis', 'cruise', 'custom', 'damage', 'danger', 'daring', 'debate',
+  'decide', 'delight', 'desert', 'detail', 'differ', 'direct', 'divide', 'dollar', 'double',
+  'during', 'easily', 'eating', 'effect', 'effort', 'either', 'empire', 'enable', 'engage',
+  'engine', 'enough', 'estate', 'evolve', 'expect', 'expert', 'fabric', 'facing', 'factor',
+  'fallen', 'family', 'famous', 'farmer', 'faster', 'father', 'figure', 'filter', 'finger',
+  'finish', 'fiscal', 'flower', 'flying', 'follow', 'forget', 'formal', 'foster', 'frozen',
+  'future', 'garden', 'gather', 'gentle', 'giving', 'global', 'golden', 'harbor', 'happen',
+  'hardly', 'health', 'helping', 'hidden', 'higher', 'holder', 'hollow', 'honest', 'hunger',
+  'hunter', 'impact', 'island', 'jungle', 'junior', 'kernel', 'knight', 'launch', 'leader',
+  'lender', 'length', 'lesson', 'letter', 'liquid', 'listen', 'little', 'living', 'locate',
+  'manner', 'marble', 'marker', 'master', 'matter', 'method', 'middle', 'mighty', 'mirror',
+  'modern', 'moment', 'monkey', 'monster', 'mother', 'muscle', 'mutton', 'narrow', 'nation',
+  'nature', 'nearly', 'needle', 'noodle', 'normal', 'notice', 'nourish', 'number', 'object',
+  'obtain', 'ocean', 'office', 'orange', 'origin', 'outfit', 'output', 'oyster', 'palace',
+  'parent', 'patrol', 'paying', 'pencil', 'people', 'permit', 'phrase', 'pickle', 'pirate',
+  'planet', 'player', 'please', 'plenty', 'pocket', 'poison', 'polish', 'ponder', 'portal',
+  'poster', 'potato', 'prefer', 'pretty', 'prince', 'prison', 'profit', 'proper', 'public',
+  'purple', 'puzzle', 'rabbit', 'racing', 'rather', 'raven', 'really', 'reason', 'recent',
+  'record', 'reduce', 'reform', 'region', 'remain', 'remote', 'rental', 'repair', 'repeat',
+  'rescue', 'result', 'return', 'reveal', 'review', 'riddle', 'rising', 'rocket', 'rubber',
+  'ruling', 'runner', 'saddle', 'saving', 'saying', 'school', 'science', 'screen', 'search',
+  'season', 'secret', 'select', 'senior', 'series', 'settle', 'shield', 'signal', 'silver',
+  'simple', 'single', 'sister', 'sketch', 'slowly', 'smooth', 'social', 'soldier', 'source',
+  'spirit', 'spoken', 'spring', 'square', 'stable', 'statue', 'steady', 'stolen', 'stone',
+  'stored', 'strain', 'street', 'strict', 'strike', 'string', 'strong', 'struct', 'studio',
+  'submit', 'suburb', 'summer', 'supply', 'survey', 'switch', 'symbol', 'target', 'temple',
+  'tender', 'tennis', 'theory', 'thread', 'threat', 'throne', 'timber', 'toggle', 'tomato',
+  'travel', 'treaty', 'tribal', 'trophy', 'tunnel', 'tuxedo', 'typing', 'tyrant', 'unique',
+  'united', 'update', 'useful', 'valley', 'velvet', 'victim', 'vision', 'visual', 'volume',
+  'wallet', 'wander', 'wealth', 'weapon', 'weekly', 'window', 'winter', 'wisdom', 'wonder',
+  'worker', 'wring', 'yellow', 'zealot'
+].filter((w) => w.length === 6)

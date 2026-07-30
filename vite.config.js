@@ -55,7 +55,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,json,woff2}'],
-        globIgnores: ['version.json']
+        globIgnores: ['version.json'],
+        navigateFallback: '/wordstrike/index.html',
+        navigateFallbackDenylist: [/version\.json/]
       }
     })
   ],
