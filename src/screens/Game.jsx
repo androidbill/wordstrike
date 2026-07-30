@@ -224,11 +224,13 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
     }
   }, [rivalOffline])
 
-  // Hotseat handoff: once the turn flips away from the player holding the
-  // phone, give them a moment to watch the reveal, then drop the curtain.
+  // Hotseat handoff: once the turn flips, switch the active role immediately.
   useEffect(() => {
     if (!hotseat || room.status !== 'playing' || room.turn === activeRole) return
-    const t = setTimeout(() => setHandoff(true), 1800)
+    const t = setTimeout(() => {
+      setActiveRole(room.turn)
+      setHandoff(false)
+    }, 1800)
     return () => clearTimeout(t)
   }, [hotseat, room.turn, room.status, activeRole])
 
@@ -569,17 +571,6 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
         />
       )}
 
-      {hotseat && handoff && room.status === 'playing' && (
-        <Curtain
-          avatar={room.players[room.turn].avatar}
-          name={room.players[room.turn].name}
-          hint="No peeking while the phone changes hands!"
-          onReady={() => {
-            setActiveRole(room.turn)
-            setHandoff(false)
-          }}
-        />
-      )}
     </div>
   )
 }
