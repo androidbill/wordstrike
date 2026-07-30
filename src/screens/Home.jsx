@@ -10,7 +10,7 @@ import { isMuted, toggleMuted } from '../sounds.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
-export default function Home({ onCreate, onJoin, onHotseat, onPractice, onSolo, error }) {
+export default function Home({ onCreate, onJoin, onHotseat, onPractice, onSolo, onTheme, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -89,6 +89,7 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, onSolo, 
               <button className="menu-item" type="button" onClick={() => setMuted(toggleMuted())}>
                 {muted ? '🔇 Sound off' : '🔊 Sound on'}
               </button>
+              <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); onTheme() }}>🎨 Theme</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setTutorialOpen(true) }}>🎓 Tutorial</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}>🏆 History</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>

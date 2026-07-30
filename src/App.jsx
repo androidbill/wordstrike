@@ -12,7 +12,7 @@ import Setup from './screens/Setup.jsx'
 import Solo from './screens/Solo.jsx'
 import { BOT_LEVELS, botWords } from './bot.js'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
-import { applyTheme } from './themes.js'
+import { applyTheme, loadPersonalTheme, savePersonalTheme } from './themes.js'
 
 const PROFILE_KEY = 'ws-profile'
 const SESSION_KEY = 'ws-session'
@@ -65,10 +65,13 @@ export default function App() {
     }
   }, [session])
 
-  // Recolor the app to the room's theme; restore defaults outside a room.
+  // Apply personal theme on first load.
+  useEffect(() => { applyTheme(loadPersonalTheme()) }, [])
+
+  // Recolor to room theme while in a room; restore personal theme when outside.
   useEffect(() => {
     if (room) applyTheme(room.theme)
-    else if (!flow) applyTheme(null)
+    else if (!flow) applyTheme(loadPersonalTheme())
   }, [room, flow])
 
   // Host is the referee: flips the room to 'playing' once both players are ready.
@@ -119,6 +122,7 @@ export default function App() {
   const startHotseat = () => setFlow({ mode: 'hotseat', step: 'profile1' })
   const startPractice = () => setFlow({ mode: 'practice', step: 'profile' })
   const startSolo = () => setFlow({ mode: 'solo' })
+  const startPersonalTheme = () => setFlow({ mode: 'personal-theme' })
 
   const onPracticeStart = async (level) => {
     const code = makeRoomCode()
@@ -317,8 +321,17 @@ export default function App() {
     screen = <Profile key="p2" title="Player 2, who are you?" initial={null} onDone={onProfileDone} onBack={() => setFlow({ ...flow, step: 'profile1' })} />
   } else if (flow?.mode === 'solo') {
     screen = <Solo onBack={() => setFlow(null)} />
+  } else if (flow?.mode === 'personal-theme') {
+    screen = (
+      <ThemePicker
+        initial={loadPersonalTheme()}
+        saveLabel="Save theme"
+        onDone={(id) => { savePersonalTheme(id); applyTheme(id); setFlow(null) }}
+        onBack={() => { applyTheme(loadPersonalTheme()); setFlow(null) }}
+      />
+    )
   } else {
-    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} onSolo={startSolo} error={error} />
+    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} onSolo={startSolo} onTheme={startPersonalTheme} error={error} />
   }
 
   return (

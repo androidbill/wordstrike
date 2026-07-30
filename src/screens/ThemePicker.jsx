@@ -3,8 +3,8 @@ import { THEMES, getTheme, applyTheme } from '../themes.js'
 
 // Host chooses the room's look. Tapping a card previews it live;
 // Continue locks it in.
-export default function ThemePicker({ onDone, onBack }) {
-  const [picked, setPicked] = useState('midnight')
+export default function ThemePicker({ onDone, onBack, initial = 'midnight', saveLabel = null }) {
+  const [picked, setPicked] = useState(initial)
 
   const pick = (id) => {
     setPicked(id)
@@ -45,7 +45,7 @@ export default function ThemePicker({ onDone, onBack }) {
       <div className="row">
         <button className="btn ghost" type="button" onClick={back}>Back</button>
         <button className="btn primary" type="button" onClick={() => onDone(picked)}>
-          Continue with {getTheme(picked).name}
+          {saveLabel || `Continue with ${getTheme(picked).name}`}
         </button>
       </div>
     </div>
