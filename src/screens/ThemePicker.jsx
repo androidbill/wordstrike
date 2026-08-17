@@ -19,7 +19,7 @@ export default function ThemePicker({ onDone, onBack }) {
   return (
     <div className="screen theme-screen">
       <h2>Pick the room's theme</h2>
-      <p className="hint">Both players will see this look. Tap to preview.</p>
+      <p className="hint">Everyone in the room sees this look. Tap to preview.</p>
       <div className="theme-grid">
         {THEMES.map((t) => {
           const accent = t.vars['--gold'] || '#f5c542'

@@ -593,6 +593,42 @@ h3 { margin: 0; }
 .player-name { font-weight: 700; font-size: 0.95rem; }
 .player-status { color: var(--ink-dim); font-size: 0.78rem; }
 
+/* ── 2v2 team seats (seat picker + lobby roster) ────────────────── */
+.team-pick {
+  display: flex; gap: 12px; width: 100%; max-width: 420px;
+  align-items: stretch; justify-content: center;
+}
+.team-panel {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 12px 10px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.team-panel.mine { border-color: var(--accent); box-shadow: 0 0 22px rgba(0, 0, 0, 0.18); }
+.team-panel.full { opacity: 0.75; }
+.team-title { font-weight: 800; font-size: 0.9rem; letter-spacing: 0.02em; }
+.team-seat {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--tile-hidden);
+  border: 1px dashed var(--panel-border);
+  border-radius: 12px;
+  padding: 10px 6px;
+  color: inherit; font: inherit; text-align: center;
+  min-width: 0;
+}
+.team-seat .player-avatar { font-size: 1.7rem; }
+.team-seat .player-avatar.waiting { width: 38px; height: 38px; font-size: 1.1rem; }
+.team-seat .player-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.team-seat.taken { border-style: solid; }
+.team-seat.ready { border-color: rgba(63, 191, 127, 0.6); }
+.team-seat.you { box-shadow: inset 0 0 0 2px var(--accent); }
+.team-seat.open { cursor: pointer; transition: transform 0.15s, border-color 0.2s; }
+.team-seat.open:active { transform: scale(0.96); }
+.team-seat.open:hover { border-color: var(--accent); }
+
 /* ── Game ──────────────────────────────────────────────────────── */
 /* Fill the viewport and spread any spare height between sections, so the
    layout never leaves a clump of dead space at the bottom. */
@@ -654,6 +690,9 @@ h3 { margin: 0; }
   color: #171203; border-color: transparent;
   animation: pulse 1.6s ease infinite;
 }
+/* Your team is up, but it's your partner's shot — bright enough to read as
+   "we're on", muted enough not to look like your own turn. */
+.turn-pill.partner { border-color: var(--accent); color: var(--ink); }
 
 .move-banner {
   width: 100%; text-align: center;
@@ -680,6 +719,18 @@ h3 { margin: 0; }
 .tab.on { color: var(--ink); border-color: var(--gold); background: rgba(245, 197, 66, 0.09); }
 
 .board { width: 100%; display: flex; flex-direction: column; gap: 9px; }
+/* Team boards hold both partners' words, so the extra rows have to share the
+   same screen height as a 5-word solo board. Declared after the height tiers
+   above so these win, then re-tightened for short phones below. */
+.game .board.rows-6 { gap: 5px; }
+.game .board.rows-6 .tile { max-width: 40px; font-size: clamp(0.95rem, 4.6vw, 1.25rem); }
+@media (max-height: 780px) {
+  .game .board.rows-6 { gap: 4px; }
+  .game .board.rows-6 .word-row { gap: 5px; }
+  .game .board.rows-6 .tile { max-width: 33px; font-size: 0.95rem; border-radius: 7px; }
+  .game .taunt-bar { gap: 4px; }
+  .game .taunt-btn { font-size: 0.95rem; padding: 3px 7px; }
+}
 .word-row {
   position: relative;
   display: flex; gap: 7px; justify-content: center;

@@ -1,14 +1,25 @@
 import { useState } from 'react'
 
 // Host picks how the match plays. Pace is online-only; hotseat is always live.
-export default function Setup({ allowAsync, onDone, onBack }) {
+// In team mode the word count is per player and each side's board is double it.
+export default function Setup({ allowAsync, teamMode, onDone, onBack }) {
   const [pace, setPace] = useState('live')
-  const [wordCount, setWordCount] = useState(5)
+  const [wordCount, setWordCount] = useState(teamMode ? 2 : 5)
   const [blitz, setBlitz] = useState(false)
+  const options = teamMode
+    ? [
+        { n: 2, label: 'Quick game · 4 per team' },
+        { n: 3, label: 'Long haul · 6 per team' }
+      ]
+    : [
+        { n: 3, label: 'Quick game' },
+        { n: 5, label: 'Classic' }
+      ]
 
   return (
     <div className="screen setup-screen">
       <h2>Game setup</h2>
+      {teamMode && <p className="hint">👥 2 vs 2 — four players, two boards.</p>}
 
       {allowAsync && (
         <div className="setup-group">
@@ -31,14 +42,17 @@ export default function Setup({ allowAsync, onDone, onBack }) {
       <div className="setup-group">
         <span className="setup-label">Words each</span>
         <div className="setup-options">
-          <button type="button" className={`setup-card slim ${wordCount === 3 ? 'picked' : ''}`} onClick={() => setWordCount(3)}>
-            <strong>3</strong>
-            <span className="setup-desc">Quick game</span>
-          </button>
-          <button type="button" className={`setup-card slim ${wordCount === 5 ? 'picked' : ''}`} onClick={() => setWordCount(5)}>
-            <strong>5</strong>
-            <span className="setup-desc">Classic</span>
-          </button>
+          {options.map((o) => (
+            <button
+              key={o.n}
+              type="button"
+              className={`setup-card slim ${wordCount === o.n ? 'picked' : ''}`}
+              onClick={() => setWordCount(o.n)}
+            >
+              <strong>{o.n}</strong>
+              <span className="setup-desc">{o.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -60,7 +74,18 @@ export default function Setup({ allowAsync, onDone, onBack }) {
 
       <div className="row">
         <button className="btn ghost" type="button" onClick={onBack}>Back</button>
-        <button className="btn primary" type="button" onClick={() => onDone({ pace: allowAsync ? pace : 'live', wordCount, blitz })}>
+        <button
+          className="btn primary"
+          type="button"
+          onClick={() =>
+            onDone({
+              pace: allowAsync ? pace : 'live',
+              teamMode,
+              ...(teamMode ? { perPlayer: wordCount } : { wordCount }),
+              blitz
+            })
+          }
+        >
           Continue
         </button>
       </div>

@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import QRModal from './QRModal.jsx'
 import { APP_URL, QrGlyph } from './Home.jsx'
+import { TEAM_LABELS, TEAM_BADGES, membersOf, openSeats, otherRole } from '../game.js'
 
-export default function Lobby({ room, role, onLeave }) {
+export default function Lobby({ room, role, seat = 0, onLeave }) {
   const [copied, setCopied] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
-  const me = room.players[role]
-  const them = room.players[role === 'host' ? 'guest' : 'host']
 
   const copy = async () => {
     try {
@@ -33,39 +32,87 @@ export default function Lobby({ room, role, onLeave }) {
         <QRModal
           url={`${APP_URL}?join=${room.code}`}
           title={`Join room ${room.code}`}
-          subtitle="Have your rival scan this to jump straight into the room."
+          subtitle="Have your rivals scan this to jump straight into the room."
           onClose={() => setQrOpen(false)}
         />
       )}
 
-      <div className="versus">
-        <div className={`player-card ${me?.ready ? 'ready' : ''}`}>
-          <span className="player-avatar">{me.avatar}</span>
-          <span className="player-name">{me.name}</span>
-          <span className="player-status">{me?.ready ? 'Ready ✓' : 'Picking words…'}</span>
-        </div>
-        <span className="vs">VS</span>
-        <div className={`player-card ${them?.ready ? 'ready' : ''}`}>
-          {them ? (
-            <>
-              <span className="player-avatar">{them.avatar}</span>
-              <span className="player-name">{them.name}</span>
-              <span className="player-status">{them.ready ? 'Ready ✓' : 'Picking words…'}</span>
-            </>
-          ) : (
-            <>
-              <span className="player-avatar waiting">?</span>
-              <span className="player-name">Waiting…</span>
-              <span className="player-status">Share the code</span>
-            </>
-          )}
-        </div>
-      </div>
+      {room.teamMode
+        ? <TeamRoster room={room} role={role} seat={seat} />
+        : <Duel room={room} role={role} />}
 
-      <p className="hint">
-        {them?.ready ? 'Starting…' : 'The battle begins the moment both players lock in their words.'}
-      </p>
+      <p className="hint">{statusLine(room, role)}</p>
       <button className="btn ghost" onClick={onLeave}>Leave room</button>
+    </div>
+  )
+}
+
+function statusLine(room, role) {
+  if (room.teamMode) {
+    const waiting = openSeats(room).length
+    if (waiting) return `Waiting on ${waiting} more player${waiting > 1 ? 's' : ''} — share the code.`
+    return 'Everyone is in. The battle begins once all four sets of words are locked in.'
+  }
+  return room.players[otherRole(role)]?.ready
+    ? 'Starting…'
+    : 'The battle begins the moment both players lock in their words.'
+}
+
+function Duel({ room, role }) {
+  const me = room.players[role]
+  const them = room.players[otherRole(role)]
+  return (
+    <div className="versus">
+      <div className={`player-card ${me?.ready ? 'ready' : ''}`}>
+        <span className="player-avatar">{me.avatar}</span>
+        <span className="player-name">{me.name}</span>
+        <span className="player-status">{me?.ready ? 'Ready ✓' : 'Picking words…'}</span>
+      </div>
+      <span className="vs">VS</span>
+      <div className={`player-card ${them?.ready ? 'ready' : ''}`}>
+        {them ? (
+          <>
+            <span className="player-avatar">{them.avatar}</span>
+            <span className="player-name">{them.name}</span>
+            <span className="player-status">{them.ready ? 'Ready ✓' : 'Picking words…'}</span>
+          </>
+        ) : (
+          <>
+            <span className="player-avatar waiting">?</span>
+            <span className="player-name">Waiting…</span>
+            <span className="player-status">Share the code</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 2v2: both teams side by side so everyone can see who is still missing and
+// who still owes the room their secret words.
+function TeamRoster({ room, role, seat }) {
+  // Nobody is asked for words until all four seats are filled, so don't claim
+  // they're picking any before then.
+  const filling = openSeats(room).length > 0
+  return (
+    <div className="team-pick lobby-teams">
+      {['host', 'guest'].map((team) => (
+        <div key={team} className={`team-panel ${team === role ? 'mine' : ''}`}>
+          <span className="team-title">{TEAM_BADGES[team]} {TEAM_LABELS[team]}</span>
+          {membersOf(room, team).map((p, s) => (
+            <div
+              key={s}
+              className={`team-seat ${p ? 'taken' : ''} ${p?.ready ? 'ready' : ''} ${team === role && s === seat ? 'you' : ''}`}
+            >
+              <span className={`player-avatar ${p ? '' : 'waiting'}`}>{p ? p.avatar : '?'}</span>
+              <span className="player-name">{p ? p.name : 'Empty seat'}</span>
+              <span className="player-status">
+                {!p ? 'Waiting…' : p.ready ? 'Ready ✓' : filling ? 'Seated' : 'Picking words…'}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

@@ -112,11 +112,14 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, error })
 
       {!joining ? (
         <div className="home-actions">
-          <button className="btn primary big" onClick={onCreate}>Create Room</button>
+          <button className="btn primary big" onClick={onCreate}>
+            Create Room
+            <span className="btn-sub">1v1 or 2v2 teams</span>
+          </button>
           <button className="btn ghost big" onClick={() => setJoining(true)}>Join Room</button>
           <button className="btn ghost big" onClick={onHotseat}>
             🤝 Pass &amp; Play
-            <span className="btn-sub">one device · works offline</span>
+            <span className="btn-sub">one device · up to 4 players · offline</span>
           </button>
           <button className="btn ghost big" onClick={onPractice}>
             🤖 Practice
@@ -157,6 +160,7 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, error })
           <li>Take turns calling a letter — it lights up everywhere it appears in your rival's five words.</li>
           <li>You have 20 seconds to call a letter, then 10 seconds to solve a word. A correct solve restarts the solve timer; a miss or timeout ends your turn.</li>
           <li>First to crack all five of their rival's words wins.</li>
+          <li>Got four players? Pick 2 vs 2 — partners share a board and a score, and turns rotate through all four.</li>
           <li>No internet? Pass &amp; Play shares one device — a curtain screen keeps words secret between turns.</li>
         </ul>
       </details>

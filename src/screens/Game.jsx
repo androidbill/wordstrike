@@ -6,6 +6,7 @@ import {
   letterWindowExpiredPatch, solveWindowExpiredPatch, passSolvePatch,
   pauseGamePatch, resumeGamePatch, pauseBudgetLeft, rematchResetPatch,
   isAsync, wordCountOf, windows,
+  sideOf, wordsOf, playerAt, activeSeat, activePlayer, isMyTurn, moverName,
   POWERUPS, revealPowerupPatch, timePowerupPatch, doublePowerupPatch
 } from '../game.js'
 import {
@@ -38,16 +39,20 @@ function pickTitle(list, room) {
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
-export default function Game({ room, role, store, hotseat, bot, onLeave }) {
-  // Hotseat: one device, so the "viewing" role follows whoever holds the
-  // phone; a curtain gates each handoff. Online: the role is fixed.
-  const [activeRole, setActiveRole] = useState(room.turn)
+export default function Game({ room, role, seat = 0, store, hotseat, bot, onLeave }) {
+  // Hotseat: one device, so the "viewing" seat follows whoever holds the
+  // phone; a curtain gates each handoff. Online: the seat is fixed.
+  const [holder, setHolder] = useState({ team: room.turn, seat: activeSeat(room, room.turn) })
   const [handoff, setHandoff] = useState(hotseat) // curtain up at game start
-  const myRole = hotseat ? activeRole : role
+  const myRole = hotseat ? holder.team : role
+  const mySeat = hotseat ? holder.seat : seat
   const rival = otherRole(myRole)
-  const me = room.players[myRole]
-  const them = room.players[rival]
-  const myTurn = room.turn === myRole && room.status === 'playing'
+  const teams = !!room.teamMode
+  const me = sideOf(room, myRole)
+  const them = sideOf(room, rival)
+  const partner = teams ? playerAt(room, myRole, 1 - mySeat) : null
+  const upNow = activePlayer(room)
+  const myTurn = isMyTurn(room, myRole, mySeat) && room.status === 'playing'
   const [view, setView] = useState('attack') // 'attack' | 'defend'
   const [solving, setSolving] = useState(null) // word index
   const [now, setNow] = useState(Date.now())
@@ -226,11 +231,13 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
 
   // Hotseat handoff: once the turn flips away from the player holding the
   // phone, give them a moment to watch the reveal, then drop the curtain.
+  const upSeat = activeSeat(room, room.turn)
   useEffect(() => {
-    if (!hotseat || room.status !== 'playing' || room.turn === activeRole) return
+    if (!hotseat || room.status !== 'playing') return
+    if (room.turn === holder.team && upSeat === holder.seat) return
     const t = setTimeout(() => setHandoff(true), 1800)
     return () => clearTimeout(t)
-  }, [hotseat, room.turn, room.status, activeRole])
+  }, [hotseat, room.turn, upSeat, room.status, holder])
 
   // Online rematch: when both flags are up, whichever player sees it resets
   // the room. Both may fire — the patch is identical, so a double write is
@@ -254,7 +261,7 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
     if (!room.startedAt) return
     const ms = m.ts - room.startedAt
     if (ms >= 0 && (!fastestRef.current || ms < fastestRef.current.ms)) {
-      fastestRef.current = { name: room.players[m.by].name, ms }
+      fastestRef.current = { name: moverName(room, m), ms }
     }
   }, [room])
 
@@ -269,12 +276,13 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
       ts: Date.now(),
       mode: hotseat ? 'hotseat' : 'online',
       code: room.code,
+      teams: !!room.teamMode,
       players: {
-        host: { name: room.players.host.name, avatar: room.players.host.avatar },
-        guest: { name: room.players.guest.name, avatar: room.players.guest.avatar }
+        host: { name: sideOf(room, 'host').name, avatar: sideOf(room, 'host').avatar },
+        guest: { name: sideOf(room, 'guest').name, avatar: sideOf(room, 'guest').avatar }
       },
-      winnerName: room.players[room.winner].name,
-      winnerAvatar: room.players[room.winner].avatar,
+      winnerName: sideOf(room, room.winner).name,
+      winnerAvatar: sideOf(room, room.winner).avatar,
       scores: { host: solvedCount(room, 'host'), guest: solvedCount(room, 'guest') },
       durationMs: room.startedAt ? Date.now() - room.startedAt : null,
       fastestSolve: fastestRef.current
@@ -388,23 +396,26 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
         <PlayerBadge player={me} active={room.turn === myRole && room.status === 'playing'} score={solvedCount(room, myRole)} total={wordCountOf(room)} reaction={reaction?.role === myRole ? reaction : null} />
         <div className="turn-pill-wrap">
           {room.status === 'playing' && (
-            <span className={`turn-pill ${myTurn ? 'mine' : ''}`}>
-              {myTurn ? (hotseat ? `${me.name}'s turn` : 'Your turn') : `${them.name}'s turn`}
+            <span className={`turn-pill ${myTurn ? 'mine' : ''} ${!myTurn && room.turn === myRole ? 'partner' : ''}`}>
+              {myTurn
+                ? (hotseat ? `${upNow.name}'s turn` : 'Your turn')
+                : `${teams ? upNow?.name : them.name}'s turn`}
+              {teams && !myTurn && room.turn === myRole && ' 🤝'}
             </span>
           )}
         </div>
         <PlayerBadge player={them} active={room.turn === rival && room.status === 'playing'} score={solvedCount(room, rival)} total={wordCountOf(room)} reaction={reaction?.role === rival ? reaction : null} right />
       </header>
 
-      <MoveBanner room={room} role={myRole} streaks={streaks} />
+      <MoveBanner room={room} role={myRole} seat={mySeat} streaks={streaks} />
 
       {!hotseat && (
         <div className="board-tabs">
           <button className={`tab ${view === 'attack' ? 'on' : ''}`} onClick={() => setView('attack')}>
-            ⚔️ {them.name}'s words
+            ⚔️ Their words
           </button>
           <button className={`tab ${view === 'defend' ? 'on' : ''}`} onClick={() => setView('defend')}>
-            🛡️ Your words
+            🛡️ {teams ? 'Your team' : 'Your words'}
           </button>
         </div>
       )}
@@ -420,7 +431,7 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
         />
       ) : (
         <Board
-          words={me.words}
+          words={wordsOf(room, myRole)}
           guessed={guessedBy(room, rival)}
           solved={solvedBy(room, rival)}
           defend
@@ -439,10 +450,12 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
                   ? 'Your turn — pick a letter whenever you like'
                   : `Pick a letter — ${letterSeconds} second${letterSeconds === 1 ? '' : 's'} left`
               : hotseat
-                ? `Nice — hand the phone to ${them.name} when you're ready`
-                : relaxed
-                  ? `Waiting for ${them.name} — you'll get a nudge when it's your turn`
-                  : 'Waiting for your rival…'}
+                ? `Nice — hand the phone to ${upNow?.name} when you're ready`
+                : teams && room.turn === myRole
+                  ? `${partner?.name || 'Your partner'} is up — same board, cheer them on 🤝`
+                  : relaxed
+                    ? `Waiting for ${teams ? upNow?.name : them.name} — you'll get a nudge when it's your turn`
+                    : 'Waiting for your rivals…'}
           </p>
           {solveWindowOpen && !relaxed && (
             <div className="solve-actions">
@@ -473,7 +486,7 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
           {myTurn && myPowerUnused && (
             <div className="powerup-wrap">
               <button className="btn ghost powerup-btn" type="button" onClick={() => setPowerOpen((o) => !o)}>
-                🎁 Power-up
+                🎁 Power-up{teams ? ' (one per team)' : ''}
               </button>
               {powerOpen && (
                 <div className="powerup-pop">
@@ -490,7 +503,11 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
         </>
       )}
       {view === 'defend' && !hotseat && room.status === 'playing' && (
-        <p className="kb-hint">Letters your rival has uncovered. Solved words show gold.</p>
+        <p className="kb-hint">
+          {teams
+            ? `Your team's board — yours plus ${partner?.name || 'your partner'}'s. Letters the rivals have uncovered show through.`
+            : 'Letters your rival has uncovered. Solved words show gold.'}
+        </p>
       )}
 
       {room.status === 'playing' && !hotseat && !bot && (
@@ -522,8 +539,8 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
             <h2 id="pause-title">Game paused</h2>
             <p className="hint">
               {room.paused.by === myRole
-                ? 'You paused the game. This is your pause time for the whole game — it resumes automatically at 0:00.'
-                : `${room.players[room.paused.by].name} paused the game. It resumes when they're ready or at 0:00.`}
+                ? `This is ${teams ? "your team's" : 'your'} pause time for the whole game — it resumes automatically at 0:00.`
+                : `${sideOf(room, room.paused.by).name} paused the game. It resumes when they're ready or at 0:00.`}
             </p>
             <PauseCountdown until={room.paused.until} now={now} />
             {room.paused.by === myRole && (
@@ -571,11 +588,13 @@ export default function Game({ room, role, store, hotseat, bot, onLeave }) {
 
       {hotseat && handoff && room.status === 'playing' && (
         <Curtain
-          avatar={room.players[room.turn].avatar}
-          name={room.players[room.turn].name}
-          hint="No peeking while the phone changes hands!"
+          avatar={upNow.avatar}
+          name={upNow.name}
+          hint={teams
+            ? `You're playing for ${sideOf(room, room.turn).name}. No peeking while the phone changes hands!`
+            : 'No peeking while the phone changes hands!'}
           onReady={() => {
-            setActiveRole(room.turn)
+            setHolder({ team: room.turn, seat: upSeat })
             setHandoff(false)
           }}
         />
@@ -607,10 +626,11 @@ function PlayerBadge({ player, label, active, score, total = 5, right, reaction 
   )
 }
 
-function MoveBanner({ room, role, streaks }) {
+function MoveBanner({ room, role, seat, streaks }) {
   const m = room.lastMove
   if (!m || room.status !== 'playing') return <div className="move-banner empty" />
-  const actor = m.by === role ? 'You' : room.players[m.by].name
+  const mine = room.teamMode ? m.by === role && (m.seat || 0) === seat : m.by === role
+  const actor = mine ? 'You' : moverName(room, m)
   const streak = streaks?.[m.by] || 0
   let text
   if (m.type === 'letter') {
@@ -662,7 +682,7 @@ function Board({ words, guessed, solved, canSolve, onSolve, defend, animate }) {
 
   let staggerIndex = 0
   return (
-    <div className="board">
+    <div className={`board rows-${words.length}`}>
       {words.map((w, wi) => {
         const isSolved = solved[wi]
         return (
@@ -771,7 +791,7 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
 function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
   const won = room.winner === role
   const rival = otherRole(role)
-  const winner = room.winner ? room.players[room.winner] : null
+  const winner = room.winner ? sideOf(room, room.winner) : null
   const loserRole = room.winner ? otherRole(room.winner) : rival
   const iWantRematch = !hotseat && room.rematch?.[role]
   const theyWantRematch = !hotseat && room.rematch?.[rival]
@@ -790,8 +810,8 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
             <span className="end-emoji">🏆</span>
             <h2>{winner.avatar} {winner.name} wins!</h2>
             <p className="end-title">{pickTitle(WIN_TITLES, room)}</p>
-            <p className="hint">All {wordCountOf(room)} of {room.players[loserRole].name}'s words — cracked.</p>
-            <FinalWords label={`${room.players[loserRole].name}'s words were:`} words={room.players[loserRole].words} />
+            <p className="hint">All {wordCountOf(room)} of {sideOf(room, loserRole).name}'s words — cracked.</p>
+            <FinalWords label={`${sideOf(room, loserRole).name}'s words were:`} words={wordsOf(room, loserRole)} />
           </>
         ) : (
           <>
@@ -799,9 +819,11 @@ function EndOverlay({ room, role, hotseat, onLeave, onRematch, opponentLeft }) {
             <h2>{won ? 'Victory!' : 'Defeated'}</h2>
             <p className="end-title">{won ? pickTitle(WIN_TITLES, room) : pickTitle(LOSE_TITLES, room)}</p>
             <p className="hint">
-              {won ? `You cracked all ${wordCountOf(room)} words.` : `${room.players[rival].name} cracked your board first.`}
+              {won
+                ? `${room.teamMode ? 'Your team' : 'You'} cracked all ${wordCountOf(room)} words.`
+                : `${sideOf(room, rival).name} cracked your board first.`}
             </p>
-            <FinalWords label={`${room.players[rival].name}'s words were:`} words={room.players[rival].words} />
+            <FinalWords label={`${sideOf(room, rival).name}'s words were:`} words={wordsOf(room, rival)} />
           </>
         )}
         <div className="row">

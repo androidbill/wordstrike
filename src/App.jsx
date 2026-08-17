@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getStore, getStoreFor, isLocalMode } from './net/store.js'
-import { makeRoomCode, newRoom, startPlayingPatch, wordCountOf } from './game.js'
+import {
+  makeRoomCode, newRoom, startPlayingPatch, wordCountOf, perPlayerCount,
+  membersOf, sideReady, openSeats, TEAM_SIZE, TEAM_LABELS
+} from './game.js'
 import Home from './screens/Home.jsx'
 import Profile from './screens/Profile.jsx'
 import Words from './screens/Words.jsx'
@@ -9,6 +12,8 @@ import Game from './screens/Game.jsx'
 import Curtain from './screens/Curtain.jsx'
 import ThemePicker from './screens/ThemePicker.jsx'
 import Setup from './screens/Setup.jsx'
+import PlayerCount from './screens/PlayerCount.jsx'
+import TeamPick from './screens/TeamPick.jsx'
 import { BOT_LEVELS, botWords } from './bot.js'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
 import { applyTheme } from './themes.js'
@@ -70,15 +75,16 @@ export default function App() {
     else if (!flow) applyTheme(null)
   }, [room, flow])
 
-  // Host is the referee: flips the room to 'playing' once both players are ready.
+  // Host is the referee: flips the room to 'playing' once both sides are ready.
+  // In team mode only the host's first seat referees — startPlayingPatch picks a
+  // random opening side, so two writers would race to different coin flips.
   useEffect(() => {
-    if (!room || !session || session.role !== 'host') return
+    if (!room || !session || session.role !== 'host' || (session.seat || 0) !== 0) return
     if (room.status !== 'lobby') {
       startingRef.current = false
       return
     }
-    const { host, guest } = room.players
-    if (host?.ready && guest?.ready && !startingRef.current) {
+    if (sideReady(room, 'host') && sideReady(room, 'guest') && !startingRef.current) {
       startingRef.current = true
       getStoreFor(session).then((store) =>
         store.update(session.code, startPlayingPatch(room))
@@ -114,9 +120,25 @@ export default function App() {
   }, [session, room])
 
   // ── Pre-room flow ─────────────────────────────────────────────
-  const startCreate = () => setFlow({ mode: 'create', step: 'profile' })
-  const startHotseat = () => setFlow({ mode: 'hotseat', step: 'profile1' })
+  const startCreate = () => setFlow({ mode: 'create', step: 'size' })
+  const startHotseat = () => setFlow({ mode: 'hotseat', step: 'size' })
   const startPractice = () => setFlow({ mode: 'practice', step: 'profile' })
+
+  // 2 players or 2v2. Hotseat needs it first so it knows how many profiles to
+  // collect; online creators answer it here too so Setup can size the boards.
+  const onSizeDone = (teamMode) =>
+    setFlow({
+      ...flow,
+      teamMode,
+      roster: [],
+      step: flow.mode === 'hotseat' ? 'players' : 'profile'
+    })
+
+  const hotseatSeats = (teamMode) => (teamMode ? 2 * TEAM_SIZE : 2)
+  const HOTSEAT_LABELS = {
+    solo: ['Player 1', 'Player 2'],
+    team: ['Team One · Player 1', 'Team One · Player 2', 'Team Two · Player 1', 'Team Two · Player 2']
+  }
 
   const onPracticeStart = async (level) => {
     const code = makeRoomCode()
@@ -134,9 +156,9 @@ export default function App() {
     const store = await getStore()
     const r = await store.getRoom(code)
     if (!r) return setError(`Room ${code} not found${isLocalMode ? ' (local mode: rooms only exist in this browser)' : ''}`)
-    if (r.players.guest) return setError(`Room ${code} is already full`)
     if (r.status !== 'lobby') return setError(`Room ${code} already started`)
-    setFlow({ mode: 'join', code, step: 'profile' })
+    if (!openSeats(r).length) return setError(`Room ${code} is already full`)
+    setFlow({ mode: 'join', code, step: 'profile', teamMode: !!r.teamMode })
   }
 
   // Opened via a scanned room QR (…?join=CODE): jump into the join flow.
@@ -151,13 +173,11 @@ export default function App() {
 
   const onProfileDone = async (p) => {
     if (flow.mode === 'hotseat') {
-      if (flow.step === 'profile1') {
-        saveProfile(p) // player 1 is the device owner
-        setFlow({ ...flow, step: 'profile2', p1: p })
-      } else {
-        // Both players known — the host picks the room's theme next.
-        setFlow({ ...flow, step: 'theme', p2: p })
-      }
+      // Everyone around the phone introduces themselves, one after another.
+      const roster = [...(flow.roster || []), p]
+      if (roster.length === 1) saveProfile(p) // player 1 is the device owner
+      const done = roster.length >= hotseatSeats(flow.teamMode)
+      setFlow({ ...flow, roster, step: done ? 'theme' : 'players' })
       return
     }
     saveProfile(p)
@@ -169,20 +189,46 @@ export default function App() {
       // Theme comes next; the room is created after that.
       setFlow({ ...flow, step: 'theme', p1: p })
       return
-    } else {
-      // Claim the guest seat now so the room reads as full.
-      const store = await getStore()
-      const r = await store.getRoom(flow.code)
-      if (!r || r.players.guest) {
-        setFlow(null)
-        setError('Someone else grabbed that seat — ask for a new room code')
-        return
-      }
-      await store.update(flow.code, {
-        'players/guest': { name: p.name, avatar: p.avatar, words: null, ready: false }
-      })
-      enterSession(flow.code, 'guest')
     }
+    if (flow.teamMode) {
+      // 2v2: choose which of the four seats to take.
+      setFlow({ ...flow, step: 'team', me: p })
+      return
+    }
+    // Claim the guest seat now so the room reads as full.
+    const store = await getStore()
+    const r = await store.getRoom(flow.code)
+    if (!r || r.players.guest) {
+      setFlow(null)
+      setError('Someone else grabbed that seat — ask for a new room code')
+      return
+    }
+    await store.update(flow.code, {
+      'players/guest': { name: p.name, avatar: p.avatar, words: null, ready: false }
+    })
+    enterSession(flow.code, 'guest')
+  }
+
+  // Two joiners can tap the same empty seat; re-read before writing so the
+  // loser of that race gets sent back to the seat map instead of overwriting.
+  const [seatError, setSeatError] = useState(null)
+  const onTeamPick = async ({ team, seat }) => {
+    const store = await getStore()
+    const r = await store.getRoom(flow.code)
+    if (!r) {
+      setFlow(null)
+      setError('That room is gone — ask for a new code')
+      return
+    }
+    if (membersOf(r, team)[seat]) {
+      setSeatError('Someone just grabbed that seat — pick another')
+      return
+    }
+    setSeatError(null)
+    await store.update(flow.code, {
+      [`members/${team}/${seat}`]: { name: flow.me.name, avatar: flow.me.avatar, ready: false }
+    })
+    enterSession(flow.code, team, { seat })
   }
 
   const onThemeDone = (themeId) => {
@@ -192,10 +238,19 @@ export default function App() {
   const onSetupDone = async (opts) => {
     if (flow.mode === 'hotseat') {
       const code = makeRoomCode()
-      const r = newRoom(code, { name: flow.p1.name, avatar: flow.p1.avatar }, null, { ...opts, pace: 'live' })
+      const seat = (p) => ({ name: p.name, avatar: p.avatar, words: null, ready: false })
+      const r = newRoom(code, seat(flow.roster[0]), null, { ...opts, pace: 'live' })
       r.theme = flow.theme
-      r.players.host.ready = false
-      r.players.guest = { name: flow.p2.name, avatar: flow.p2.avatar, words: null, ready: false }
+      if (opts.teamMode) {
+        // Roster order is team one, then team two.
+        r.members = {
+          host: [seat(flow.roster[0]), seat(flow.roster[1])],
+          guest: [seat(flow.roster[2]), seat(flow.roster[3])]
+        }
+      } else {
+        r.players.host.ready = false
+        r.players.guest = seat(flow.roster[1])
+      }
       const s = await getStoreFor({ hotseat: true })
       await s.createRoom(code, r)
       enterSession(code, 'host', { hotseat: true })
@@ -212,6 +267,16 @@ export default function App() {
 
   const onRoomWordsDone = async (words) => {
     const s = await getStoreFor(session)
+    if (room.teamMode) {
+      // Hotseat walks the seats in order; online each device fills its own.
+      const t = session.hotseat ? nextPicker(room) : { team: session.role, seat: session.seat || 0 }
+      if (!t) return
+      await s.update(session.code, {
+        [`members/${t.team}/${t.seat}/words`]: words,
+        [`members/${t.team}/${t.seat}/ready`]: true
+      })
+      return
+    }
     // Hotseat: fill the host slot first, then the guest slot.
     const target = session.hotseat
       ? (room.players.host.words ? 'guest' : 'host')
@@ -228,7 +293,9 @@ export default function App() {
     if (!room || !store) {
       screen = <div className="center-page"><div className="spinner" /></div>
     } else if (room.status === 'lobby') {
-      if (session.hotseat) {
+      if (room.teamMode) {
+        screen = teamLobbyScreen({ room, session, onRoomWordsDone, leaveRoom })
+      } else if (session.hotseat) {
         const { host, guest } = room.players
         if (!host.words) {
           screen = (
@@ -272,7 +339,7 @@ export default function App() {
         }
       }
     } else {
-      screen = <Game room={room} role={session.role} store={store} hotseat={!!session.hotseat} bot={session.bot || null} onLeave={leaveRoom} />
+      screen = <Game room={room} role={session.role} seat={session.seat || 0} store={store} hotseat={!!session.hotseat} bot={session.bot || null} onLeave={leaveRoom} />
     }
   } else if (flow?.step === 'difficulty') {
     screen = (
@@ -294,6 +361,7 @@ export default function App() {
     screen = (
       <Setup
         allowAsync={flow.mode !== 'hotseat'}
+        teamMode={!!flow.teamMode}
         onDone={onSetupDone}
         onBack={() => setFlow({ ...flow, step: 'theme' })}
       />
@@ -302,15 +370,50 @@ export default function App() {
     screen = (
       <ThemePicker
         onDone={onThemeDone}
-        onBack={() => setFlow({ ...flow, step: flow.mode === 'hotseat' ? 'profile2' : 'profile' })}
+        onBack={() =>
+          setFlow(
+            flow.mode === 'hotseat'
+              ? { ...flow, step: 'players', roster: flow.roster.slice(0, -1) }
+              : { ...flow, step: 'profile' }
+          )
+        }
+      />
+    )
+  } else if (flow?.step === 'size') {
+    screen = <PlayerCount hotseat={flow.mode === 'hotseat'} onDone={onSizeDone} onBack={() => setFlow(null)} />
+  } else if (flow?.step === 'players') {
+    const taken = flow.roster?.length || 0
+    const labels = HOTSEAT_LABELS[flow.teamMode ? 'team' : 'solo']
+    screen = (
+      <Profile
+        key={taken}
+        title={`${labels[taken]}, who are you?`}
+        initial={taken === 0 ? profile : null}
+        onDone={onProfileDone}
+        onBack={() =>
+          taken === 0
+            ? setFlow({ ...flow, step: 'size' })
+            : setFlow({ ...flow, roster: flow.roster.slice(0, -1) })
+        }
+      />
+    )
+  } else if (flow?.step === 'team') {
+    screen = (
+      <TeamPick
+        code={flow.code}
+        error={seatError}
+        onPick={onTeamPick}
+        onBack={() => { setSeatError(null); setFlow({ ...flow, step: 'profile' }) }}
       />
     )
   } else if (flow?.step === 'profile') {
-    screen = <Profile initial={profile} onDone={onProfileDone} onBack={() => setFlow(null)} />
-  } else if (flow?.step === 'profile1') {
-    screen = <Profile title="Player 1, who are you?" initial={profile} onDone={onProfileDone} onBack={() => setFlow(null)} />
-  } else if (flow?.step === 'profile2') {
-    screen = <Profile key="p2" title="Player 2, who are you?" initial={null} onDone={onProfileDone} onBack={() => setFlow({ ...flow, step: 'profile1' })} />
+    screen = (
+      <Profile
+        initial={profile}
+        onDone={onProfileDone}
+        onBack={() => setFlow(flow.mode === 'create' ? { ...flow, step: 'size' } : null)}
+      />
+    )
   } else {
     screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} error={error} />
   }
@@ -331,6 +434,46 @@ export default function App() {
       )}
     </div>
   )
+}
+
+// Seats pick words in a fixed order: team one, then team two.
+function nextPicker(room) {
+  for (const team of ['host', 'guest']) {
+    for (let seat = 0; seat < TEAM_SIZE; seat++) {
+      if (!membersOf(room, team)[seat]?.words) return { team, seat }
+    }
+  }
+  return null
+}
+
+// Lobby stage of a 2v2 room: hand the phone round (hotseat) or wait for the
+// four seats to fill, then take this device's own word picks.
+function teamLobbyScreen({ room, session, onRoomWordsDone, leaveRoom }) {
+  const n = perPlayerCount(room)
+  if (session.hotseat) {
+    const t = nextPicker(room)
+    if (!t) return <div className="center-page"><div className="spinner" /></div>
+    const p = membersOf(room, t.team)[t.seat]
+    const mate = membersOf(room, t.team)[1 - t.seat]
+    return (
+      <GatedWords
+        key={`${t.team}-${t.seat}`}
+        avatar={p.avatar}
+        name={p.name}
+        hint={`You're with ${mate?.name || 'your partner'} on ${TEAM_LABELS[t.team]}. Pick ${n} words — the other team mustn't see.`}
+        title={`${p.name}, pick your ${n} words`}
+        count={n}
+        onDone={onRoomWordsDone}
+        onBack={leaveRoom}
+      />
+    )
+  }
+  const seat = session.seat || 0
+  const mine = membersOf(room, session.role)[seat]
+  if (openSeats(room).length || mine?.words) {
+    return <Lobby room={room} role={session.role} seat={seat} onLeave={leaveRoom} />
+  }
+  return <Words title={`Pick your ${n} words`} count={n} onDone={onRoomWordsDone} onBack={leaveRoom} />
 }
 
 // Curtain first, then the word picker — keeps player 2's screen private.
