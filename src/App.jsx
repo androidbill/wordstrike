@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getStore, getStoreFor, isLocalMode } from './net/store.js'
 import {
-  makeRoomCode, newRoom, startPlayingPatch, wordCountOf, perPlayerCount,
+  makeRoomCode, newRoom, startPlayingPatch, wordCountOf, wordLenOf, perPlayerCount,
   membersOf, sideReady, openSeats, TEAM_SIZE, TEAM_LABELS
 } from './game.js'
 import Home from './screens/Home.jsx'
@@ -14,9 +14,10 @@ import ThemePicker from './screens/ThemePicker.jsx'
 import Setup from './screens/Setup.jsx'
 import PlayerCount from './screens/PlayerCount.jsx'
 import TeamPick from './screens/TeamPick.jsx'
+import Solo from './screens/Solo.jsx'
 import { BOT_LEVELS, botWords } from './bot.js'
 import { hardRefresh, useUpdateCheck } from './appUpdates.js'
-import { applyTheme } from './themes.js'
+import { applyTheme, loadPersonalTheme, savePersonalTheme } from './themes.js'
 
 const PROFILE_KEY = 'ws-profile'
 const SESSION_KEY = 'ws-session'
@@ -69,10 +70,13 @@ export default function App() {
     }
   }, [session])
 
-  // Recolor the app to the room's theme; restore defaults outside a room.
+  // Apply personal theme on first load.
+  useEffect(() => { applyTheme(loadPersonalTheme()) }, [])
+
+  // Recolor to room theme while in a room; restore personal theme when outside.
   useEffect(() => {
     if (room) applyTheme(room.theme)
-    else if (!flow) applyTheme(null)
+    else if (!flow) applyTheme(loadPersonalTheme())
   }, [room, flow])
 
   // Host is the referee: flips the room to 'playing' once both sides are ready.
@@ -123,6 +127,8 @@ export default function App() {
   const startCreate = () => setFlow({ mode: 'create', step: 'size' })
   const startHotseat = () => setFlow({ mode: 'hotseat', step: 'size' })
   const startPractice = () => setFlow({ mode: 'practice', step: 'profile' })
+  const startSolo = () => setFlow({ mode: 'solo' })
+  const startPersonalTheme = () => setFlow({ mode: 'personal-theme' })
 
   // 2 players or 2v2. Hotseat needs it first so it knows how many profiles to
   // collect; online creators answer it here too so Setup can size the boards.
@@ -303,9 +309,10 @@ export default function App() {
               key="p1"
               avatar={host.avatar}
               name={host.name}
-              hint="Pick your 5 secret words — no peeking behind you!"
+              hint="Pick your secret words — no peeking behind you!"
               title={`${host.name}, pick your ${wordCountOf(room)} words`}
               count={wordCountOf(room)}
+              wordLen={wordLenOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -319,6 +326,7 @@ export default function App() {
               hint={`${host.name} has locked in. Your turn to pick — no peeking behind you!`}
               title={`${guest.name}, pick your ${wordCountOf(room)} words`}
               count={wordCountOf(room)}
+              wordLen={wordLenOf(room)}
               onDone={onRoomWordsDone}
               onBack={leaveRoom}
             />
@@ -335,7 +343,7 @@ export default function App() {
           // Host waiting for guest to arrive before picking words.
           screen = <Lobby room={room} role={session.role} onLeave={leaveRoom} />
         } else {
-          screen = <Words title={`Pick your ${wordCountOf(room)} words`} count={wordCountOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
+          screen = <Words title={`Pick your ${wordCountOf(room)} words`} count={wordCountOf(room)} wordLen={wordLenOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
         }
       }
     } else {
@@ -414,8 +422,19 @@ export default function App() {
         onBack={() => setFlow(flow.mode === 'create' ? { ...flow, step: 'size' } : null)}
       />
     )
+  } else if (flow?.mode === 'solo') {
+    screen = <Solo onBack={() => setFlow(null)} />
+  } else if (flow?.mode === 'personal-theme') {
+    screen = (
+      <ThemePicker
+        initial={loadPersonalTheme()}
+        saveLabel="Save theme"
+        onDone={(id) => { savePersonalTheme(id); applyTheme(id); setFlow(null) }}
+        onBack={() => { applyTheme(loadPersonalTheme()); setFlow(null) }}
+      />
+    )
   } else {
-    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} error={error} />
+    screen = <Home onCreate={startCreate} onJoin={startJoin} onHotseat={startHotseat} onPractice={startPractice} onSolo={startSolo} onTheme={startPersonalTheme} error={error} />
   }
 
   return (
@@ -463,6 +482,7 @@ function teamLobbyScreen({ room, session, onRoomWordsDone, leaveRoom }) {
         hint={`You're with ${mate?.name || 'your partner'} on ${TEAM_LABELS[t.team]}. Pick ${n} words — the other team mustn't see.`}
         title={`${p.name}, pick your ${n} words`}
         count={n}
+        wordLen={wordLenOf(room)}
         onDone={onRoomWordsDone}
         onBack={leaveRoom}
       />
@@ -473,7 +493,7 @@ function teamLobbyScreen({ room, session, onRoomWordsDone, leaveRoom }) {
   if (openSeats(room).length || mine?.words) {
     return <Lobby room={room} role={session.role} seat={seat} onLeave={leaveRoom} />
   }
-  return <Words title={`Pick your ${n} words`} count={n} onDone={onRoomWordsDone} onBack={leaveRoom} />
+  return <Words title={`Pick your ${n} words`} count={n} wordLen={wordLenOf(room)} onDone={onRoomWordsDone} onBack={leaveRoom} />
 }
 
 // Curtain first, then the word picker — keeps player 2's screen private.

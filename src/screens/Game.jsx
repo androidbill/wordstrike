@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Curtain from './Curtain.jsx'
 import {
   otherRole, targetWords, guessedBy, solvedBy, solvedCount,
   LETTER_WINDOW_MS, letterMovePatch, solveMovePatch,
@@ -41,9 +40,8 @@ const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
 export default function Game({ room, role, seat = 0, store, hotseat, bot, onLeave }) {
   // Hotseat: one device, so the "viewing" seat follows whoever holds the
-  // phone; a curtain gates each handoff. Online: the seat is fixed.
+  // phone. Online: the seat is fixed.
   const [holder, setHolder] = useState({ team: room.turn, seat: activeSeat(room, room.turn) })
-  const [handoff, setHandoff] = useState(hotseat) // curtain up at game start
   const myRole = hotseat ? holder.team : role
   const mySeat = hotseat ? holder.seat : seat
   const rival = otherRole(myRole)
@@ -229,13 +227,14 @@ export default function Game({ room, role, seat = 0, store, hotseat, bot, onLeav
     }
   }, [rivalOffline])
 
-  // Hotseat handoff: once the turn flips away from the player holding the
-  // phone, give them a moment to watch the reveal, then drop the curtain.
+  // Hotseat handoff: once the turn flips, give the table a moment to watch the
+  // reveal, then hand the phone to whoever is up next. In 2v2 that is a seat on
+  // the other team, so the holder tracks both which side and which player.
   const upSeat = activeSeat(room, room.turn)
   useEffect(() => {
     if (!hotseat || room.status !== 'playing') return
     if (room.turn === holder.team && upSeat === holder.seat) return
-    const t = setTimeout(() => setHandoff(true), 1800)
+    const t = setTimeout(() => setHolder({ team: room.turn, seat: upSeat }), 1800)
     return () => clearTimeout(t)
   }, [hotseat, room.turn, upSeat, room.status, holder])
 
@@ -586,19 +585,6 @@ export default function Game({ room, role, seat = 0, store, hotseat, bot, onLeav
         />
       )}
 
-      {hotseat && handoff && room.status === 'playing' && (
-        <Curtain
-          avatar={upNow.avatar}
-          name={upNow.name}
-          hint={teams
-            ? `You're playing for ${sideOf(room, room.turn).name}. No peeking while the phone changes hands!`
-            : 'No peeking while the phone changes hands!'}
-          onReady={() => {
-            setHolder({ team: room.turn, seat: upSeat })
-            setHandoff(false)
-          }}
-        />
-      )}
     </div>
   )
 }
@@ -757,7 +743,7 @@ function SolveModal({ word, index, guessed, onSubmit, onClose }) {
         <h3>Solve word #{index + 1}</h3>
         <p className="hint">Type only the highlighted blank letters. Get it right and the timer restarts.</p>
         <div className="solve-tiles" onClick={() => inputRef.current?.focus()}>
-          {[0, 1, 2, 3, 4].map((i) => {
+          {[...word].map((_, i) => {
             const known = guessed[word[i]] ? word[i] : null
             const blankIndex = blankIndexes.indexOf(i)
             const typed = blankIndex >= 0 ? blankLetters[blankIndex] : ''

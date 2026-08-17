@@ -15,6 +15,20 @@ export default function Lobby({ room, role, seat = 0, onLeave }) {
     } catch { /* clipboard unavailable — code is on screen anyway */ }
   }
 
+  const share = async () => {
+    const url = `${APP_URL}?join=${room.code}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Join my WordStrike room', text: `Join my room — tap the link or enter code ${room.code}`, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+        window.alert('Room link copied to your clipboard.')
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') window.alert('Unable to share on this device.')
+    }
+  }
+
   return (
     <div className="screen lobby">
       <h2>Battle room</h2>
@@ -27,6 +41,9 @@ export default function Lobby({ room, role, seat = 0, onLeave }) {
 
       <button className="btn ghost qr-room-btn" type="button" onClick={() => setQrOpen(true)}>
         <QrGlyph /> Show QR to join
+      </button>
+      <button className="btn ghost qr-room-btn" type="button" onClick={share}>
+        <ShareGlyph /> Share room to join
       </button>
       {qrOpen && (
         <QRModal
@@ -44,6 +61,14 @@ export default function Lobby({ room, role, seat = 0, onLeave }) {
       <p className="hint">{statusLine(room, role)}</p>
       <button className="btn ghost" onClick={onLeave}>Leave room</button>
     </div>
+  )
+}
+
+function ShareGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M18 16c-.79 0-1.5.31-2.03.81L8.91 12.7A3.3 3.3 0 0 0 9 12c0-.24-.04-.47-.09-.7l7-4.07A2.99 2.99 0 0 0 18 8a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.09 9.77A2.99 2.99 0 0 0 6 9a3 3 0 0 0 0 6c.79 0 1.5-.31 2.03-.81l7.06 4.12c-.05.21-.09.43-.09.69a3 3 0 1 0 3-3z"/>
+    </svg>
   )
 }
 

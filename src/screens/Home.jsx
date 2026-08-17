@@ -10,7 +10,7 @@ import { isMuted, toggleMuted } from '../sounds.js'
 
 export const APP_URL = 'https://androidbill.github.io/wordstrike/'
 
-export default function Home({ onCreate, onJoin, onHotseat, onPractice, error }) {
+export default function Home({ onCreate, onJoin, onHotseat, onPractice, onSolo, onTheme, error }) {
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -89,6 +89,7 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, error })
               <button className="menu-item" type="button" onClick={() => setMuted(toggleMuted())}>
                 {muted ? '🔇 Sound off' : '🔊 Sound on'}
               </button>
+              <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); onTheme() }}>🎨 Theme</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setTutorialOpen(true) }}>🎓 Tutorial</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}>🏆 History</button>
               <button className="menu-item" type="button" onClick={() => { setMenuOpen(false); setAboutOpen(true) }}>ⓘ About</button>
@@ -120,6 +121,10 @@ export default function Home({ onCreate, onJoin, onHotseat, onPractice, error })
           <button className="btn ghost big" onClick={onHotseat}>
             🤝 Pass &amp; Play
             <span className="btn-sub">one device · up to 4 players · offline</span>
+          </button>
+          <button className="btn ghost big" onClick={onSolo}>
+            🎯 Solo Strike
+            <span className="btn-sub">guess the word · endless mode</span>
           </button>
           <button className="btn ghost big" onClick={onPractice}>
             🤖 Practice

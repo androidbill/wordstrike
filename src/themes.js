@@ -98,6 +98,16 @@ export const THEMES = [
   }
 ]
 
+const PERSONAL_THEME_KEY = 'ws-personal-theme'
+
+export function loadPersonalTheme() {
+  return localStorage.getItem(PERSONAL_THEME_KEY) || 'midnight'
+}
+
+export function savePersonalTheme(id) {
+  localStorage.setItem(PERSONAL_THEME_KEY, id)
+}
+
 const THEME_VARS = [
   '--bg', '--bg2', '--gold', '--gold-deep', '--blue',
   '--tile-hidden', '--tile-border', '--glow1', '--glow2'

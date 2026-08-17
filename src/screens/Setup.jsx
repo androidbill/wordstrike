@@ -5,6 +5,7 @@ import { useState } from 'react'
 export default function Setup({ allowAsync, teamMode, onDone, onBack }) {
   const [pace, setPace] = useState('live')
   const [wordCount, setWordCount] = useState(teamMode ? 2 : 5)
+  const [wordLen, setWordLen] = useState(5)
   const [blitz, setBlitz] = useState(false)
   const options = teamMode
     ? [
@@ -56,6 +57,20 @@ export default function Setup({ allowAsync, teamMode, onDone, onBack }) {
         </div>
       </div>
 
+      <div className="setup-group">
+        <span className="setup-label">Word length</span>
+        <div className="setup-options">
+          <button type="button" className={`setup-card slim ${wordLen === 5 ? 'picked' : ''}`} onClick={() => setWordLen(5)}>
+            <strong>5 letters</strong>
+            <span className="setup-desc">Classic</span>
+          </button>
+          <button type="button" className={`setup-card slim ${wordLen === 6 ? 'picked' : ''}`} onClick={() => setWordLen(6)}>
+            <strong>6 letters</strong>
+            <span className="setup-desc">More challenge</span>
+          </button>
+        </div>
+      </div>
+
       {pace === 'live' && (
         <div className="setup-group">
           <span className="setup-label">Speed</span>
@@ -82,10 +97,12 @@ export default function Setup({ allowAsync, teamMode, onDone, onBack }) {
               pace: allowAsync ? pace : 'live',
               teamMode,
               ...(teamMode ? { perPlayer: wordCount } : { wordCount }),
+              wordLen,
               blitz
             })
           }
         >
+
           Continue
         </button>
       </div>
